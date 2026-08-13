@@ -1,0 +1,58 @@
+# Example configuration for test_aim.py.
+#
+# Evaluates a checkpoint produced by train_aim.py on a held-out
+# CircuitNet-N28 DRC set using the same metrics and ROC / PR-AUC
+# computation as code_examples/CircuitNet/drc_prediction/test.py
+# (shared in :mod:`test_utils`).  The nested layout mirrors the training
+# config (data / model / runtime / evaluation blocks).  ``strategy.type``
+# is retained for run metadata / Aim grouping.
+
+experiment: fedavg_drc_test
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./metadata/n28_test.csv
+  feature_dir: ./training_set/DRC/feature
+  label_dir:   ./training_set/DRC/label
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNet
+  in_channels: 9
+  out_channels: 1
+
+# Only the `type` field is meaningful here (used to tag the Aim run).
+strategy:
+  type: fedavg
+
+checkpoint: ./work_dirs/fedavg_pilot/global_model_final.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  device: cpu
+  num_workers: 0
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+# The list, thresholds and plot_roc flag exactly match the reference
+# config drc_test_*.yaml from code_examples/CircuitNet/drc_prediction.
+evaluation:
+  # Per-sample image metrics: any name resolvable by
+  # test_utils.build_metric (currently: nrms, ssim, psnr, emd).
+  eval_metric:
+    - NRMS
+    - SSIM
+  threshold: 0.1           # DRC label binarisation for ROC / PR-AUC
+  plot_roc: true           # dump per-sample predictions + run ROC/PR sweep
+  # Directory root for artefacts.  Predictions land in `${save_path}/test_result/`
+  # and the roc/prc CSV in `${save_path}/roc_prc.csv`.  Test metrics summary
+  # is written to `${save_path}/test_metrics.json`.
+  save_path: ./work_dirs/fedavg_pilot

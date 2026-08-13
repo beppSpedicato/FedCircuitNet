@@ -1,0 +1,100 @@
+from typing import List, Optional
+
+import numpy as np
+import pandas as pd
+
+from .base import DatasetPartitioner
+
+
+class IIDPartitioner(DatasetPartitioner):
+    """Partitions the CircuitNet-N28 dataset into IID subsets.
+
+    Each partition mirrors the global distribution of design-configuration
+    parameters (and optionally label severity tiers) through round-robin
+    assignment within every stratum defined by a composite categorical key.
+
+    Args:
+        n_partitions: Number of subsets to produce.
+        mode: Stratification scope:
+            - ``"features"`` (default): stratify on design-configuration
+              columns only (design_name, macro_count, macro_placement,
+              power_mesh, filler_insertion).
+            - ``"features_label"``: also include the label tier column so
+              each partition contains a proportional mix of DRC severity
+              levels.  Requires the DataFrame to carry a ``tier`` column,
+              produced by :class:`~partitioning.label_tier.LabelTierAssigner`.
+        stratify_cols: Override the default set of categorical columns used
+            for stratification.  Columns absent from the input DataFrame are
+            silently skipped.
+        label_tier_col: Name of the integer tier column.  Only used when
+            ``mode="features_label"``.  Defaults to ``"tier"``.
+        seed: Random seed for reproducible shuffling within each stratum.
+    """
+
+    _DEFAULT_STRATIFY_COLS: List[str] = [
+        "design_name",
+        "macro_count",
+        "macro_placement",
+        "power_mesh",
+        "filler_insertion",
+    ]
+
+    def __init__(
+        self,
+        n_partitions: int,
+        mode: str = "features",
+        stratify_cols: Optional[List[str]] = None,
+        label_tier_col: str = "tier",
+        seed: int = 42,
+    ) -> None:
+        super().__init__(n_partitions)
+        if mode not in ("features", "features_label"):
+            raise ValueError(f"mode must be 'features' or 'features_label', got {mode!r}")
+        self.mode = mode
+        self.stratify_cols = stratify_cols or self._DEFAULT_STRATIFY_COLS
+        self.label_tier_col = label_tier_col
+        self.seed = seed
+
+    def partition(self, df: pd.DataFrame) -> List[pd.DataFrame]:
+        """Return ``n_partitions`` IID subsets of *df*.
+
+        Args:
+            df: Metadata DataFrame produced by parsing CircuitNet-N28 filenames.
+                When ``mode="features_label"``, must also contain a tier column
+                (see :class:`~partitioning.label_tier.LabelTierAssigner`).
+
+        Returns:
+            List of DataFrames, each with a reset integer index.
+        """
+        self._validate(df)
+
+        if self.mode == "features_label" and self.label_tier_col not in df.columns:
+            raise ValueError(
+                f"mode='features_label' requires column '{self.label_tier_col}' in df. "
+                "Run LabelTierAssigner.process_csv() and merge the result first."
+            )
+
+        df = df.copy().reset_index(drop=True)
+        rng = np.random.default_rng(self.seed)
+
+        stratify = list(self.stratify_cols)
+        if self.mode == "features_label":
+            stratify.append(self.label_tier_col)
+
+        available = [c for c in stratify if c in df.columns]
+        strat_key = (
+            df[available].astype(str).agg("-".join, axis=1)
+            if available
+            else pd.Series(["_all_"] * len(df), index=df.index)
+        )
+
+        assignment = np.empty(len(df), dtype=int)
+        for group_positions in df.groupby(strat_key).groups.values():
+            positions = np.array(group_positions)
+            rng.shuffle(positions)
+            assignment[positions] = np.arange(len(positions)) % self.n_partitions
+
+        return [
+            df[assignment == i].reset_index(drop=True)
+            for i in range(self.n_partitions)
+        ]

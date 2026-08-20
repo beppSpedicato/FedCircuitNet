@@ -255,7 +255,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
     if "filename" not in metadata_df.columns:
         raise SystemExit(
             "data.metadata_csv must contain a 'filename' column; "
-            f"got {list(metadata_df.columns)}"
+            f"got {list(metadata_df.columns)}"\
         )
     print(f"     {len(metadata_df)} samples loaded from {data_cfg['metadata_csv']}")
 

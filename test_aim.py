@@ -100,11 +100,11 @@ def test(CFG: omegaconf.DictConfig) -> None:
 
     print("===> Loading metadata")
     metadata_df = pd.read_csv(data_cfg["metadata_csv"])
-    if "filename" not in metadata_df.columns:
+    """ if "filename" not in metadata_df.columns:
         raise SystemExit(
             "data.metadata_csv must contain a 'filename' column; "
             f"got {list(metadata_df.columns)}"
-        )
+        ) """
     print(f"     {len(metadata_df)} test samples loaded from {data_cfg['metadata_csv']}")
 
     # Reference test.py forces batch_size=1 + shuffle=False and returns the

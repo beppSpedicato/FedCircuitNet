@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# aim
+.aim/
+work_dirs/
+outputs/

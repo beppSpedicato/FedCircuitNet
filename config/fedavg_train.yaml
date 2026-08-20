@@ -16,7 +16,8 @@ experiment: fedavg_drc_pilot
 # ---------------------------------------------------------------------------
 data:
   # CSV with at least a `filename` column, one row per CircuitNet-N28 sample.
-  metadata_csv: ./metadata/n28_train.csv
+  # Produced by `build_all_metadata.sh` from the upstream ann-file CSVs.
+  metadata_csv: ./files/train_N28.csv
   # Each sample is expected at `${feature_dir}/${filename}.npy`
   # and `${label_dir}/${filename}.npy`.
   feature_dir: ./training_set/DRC/feature

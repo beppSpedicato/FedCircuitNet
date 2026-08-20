@@ -13,7 +13,8 @@ experiment: fedavg_drc_test
 # Data
 # ---------------------------------------------------------------------------
 data:
-  metadata_csv: ./metadata/n28_test.csv
+  # Produced by `build_all_metadata.sh` from the upstream ann-file CSVs.
+  metadata_csv: ./files/test_N28.csv
   feature_dir: ./training_set/DRC/feature
   label_dir:   ./training_set/DRC/label
 

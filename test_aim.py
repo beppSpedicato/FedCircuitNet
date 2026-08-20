@@ -39,6 +39,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
+from federated.device import features_to_device, resolve_device  # noqa: E402
 from models.routenet import RouteNet  # noqa: E402
 from test_utils import build_metric, roc_prc, multi_process_score, set_random_seed  # noqa: E402
 
@@ -48,7 +49,11 @@ MODEL_REGISTRY: Dict[str, type] = {
 }
 
 
-def _load_model(model_cfg: Dict[str, Any], checkpoint: str, device: str) -> torch.nn.Module:
+def _load_model(
+    model_cfg: Dict[str, Any],
+    checkpoint: str,
+    device: torch.device,
+) -> torch.nn.Module:
     mtype = model_cfg["type"]
     if mtype not in MODEL_REGISTRY:
         raise ValueError(
@@ -86,7 +91,8 @@ def test(CFG: omegaconf.DictConfig) -> None:
     strategy_tag = (resolved.get("strategy") or {}).get("type")
     checkpoint = resolved["checkpoint"]
 
-    device = runtime_cfg.get("device", "cpu")
+    device = resolve_device(runtime_cfg)
+    print(f"===> Using device: {device}")
     threshold = float(evaluation_cfg.get("threshold", 0.1))
     plot_roc = bool(evaluation_cfg.get("plot_roc", False))
     save_path = evaluation_cfg["save_path"]
@@ -132,8 +138,7 @@ def test(CFG: omegaconf.DictConfig) -> None:
     with torch.no_grad():
         with tqdm(total=len(loader), desc="test") as bar:
             for feature, label, label_path in loader:
-                feature = feature.to(device)
-                label = label.to(device)
+                feature, label = features_to_device(feature, label, runtime_cfg)
 
                 prediction = model(feature)
 

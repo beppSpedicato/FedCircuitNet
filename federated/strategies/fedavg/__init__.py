@@ -13,6 +13,7 @@ import torch.nn as nn
 from .aggregation import WeightedAverageAggregator
 from .client import FedAvgClient
 from .strategy import FedAvgStrategy
+from ...device import resolve_device
 
 
 LOSS_REGISTRY: Dict[str, type] = {
@@ -33,8 +34,9 @@ def build_fedavg(
         strategy_cfg: Contents of the ``strategy`` config block minus its
             ``type`` field.  Expected keys: ``local_epochs``,
             ``learning_rate``, ``batch_size``, ``loss_type``.
-        runtime_cfg: Contents of the ``runtime`` block (``device``,
-            ``seed``, ``num_workers``, ``shuffle``).
+        runtime_cfg: Contents of the ``runtime`` block (``cpu`` / ``gpu``
+            / ``gpu_id`` as in ``code_examples/CircuitNet/drc_prediction/train.py``,
+            plus ``seed``, ``num_workers``, ``shuffle``).
     """
     loss_type = strategy_cfg.get("loss_type", "MSELoss")
     if loss_type not in LOSS_REGISTRY:
@@ -47,7 +49,7 @@ def build_fedavg(
         learning_rate=float(strategy_cfg["learning_rate"]),
         batch_size=int(strategy_cfg["batch_size"]),
         loss_fn=LOSS_REGISTRY[loss_type](),
-        device=runtime_cfg.get("device", "cpu"),
+        device=resolve_device(runtime_cfg),
         seed=int(runtime_cfg.get("seed", 42)),
         num_workers=int(runtime_cfg.get("num_workers", 0)),
         shuffle=bool(runtime_cfg.get("shuffle", True)),

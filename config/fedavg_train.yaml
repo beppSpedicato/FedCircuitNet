@@ -56,7 +56,8 @@ strategy:
 # Runtime (shared across all strategies)
 # ---------------------------------------------------------------------------
 runtime:
-  device: cuda:0              # e.g. "cuda:0"
+  cpu: false                  # if true, ignore `gpu` and run on CPU
+  gpu: 0                      # CUDA device index (used unless cpu: true)
   num_workers: 0
   seed: 42
   shuffle: true

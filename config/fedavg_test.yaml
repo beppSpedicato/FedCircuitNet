@@ -36,7 +36,8 @@ checkpoint: ./work_dirs/fedavg_pilot/global_model_final.pth
 # Runtime
 # ---------------------------------------------------------------------------
 runtime:
-  device: cuda:0
+  cpu: false                  # if true, ignore `gpu` and run on CPU
+  gpu: 0                      # CUDA device index (used unless cpu: true)
   num_workers: 0
   seed: 42
 

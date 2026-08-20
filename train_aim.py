@@ -48,6 +48,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
+from federated.device import features_to_device, resolve_device  # noqa: E402
 from federated.strategies import build_strategy  # noqa: E402
 from models.routenet import RouteNet  # noqa: E402
 from partitioning.iid import IIDPartitioner  # noqa: E402
@@ -156,7 +157,7 @@ def _track_partition_distribution(
 def _evaluate_global_model(
     model: nn.Module,
     loader: DataLoader,
-    device: str,
+    runtime_cfg: Dict[str, Any],
     threshold: float,
 ) -> Dict[str, float]:
     """Return pixel MSE + optional ROC-AUC / PR-AUC on the eval loader."""
@@ -172,8 +173,7 @@ def _evaluate_global_model(
 
     with torch.no_grad():
         for feature, label in loader:
-            feature = feature.to(device)
-            label = label.to(device)
+            feature, label = features_to_device(feature, label, runtime_cfg)
             prediction = model(feature)
 
             total_loss += float(loss_fn(prediction, label).item())
@@ -206,7 +206,7 @@ def _build_round_callback(
     eval_model: Optional[nn.Module],
     eval_freq: int,
     threshold: float,
-    device: str,
+    runtime_cfg: Dict[str, Any],
 ):
     """Compose the on_round_end callback: Aim tracking + optional eval.
 
@@ -257,7 +257,7 @@ def _build_round_callback(
             and stats.round_idx % eval_freq == 0
         ):
             eval_model.load_state_dict(global_state)
-            metrics = _evaluate_global_model(eval_model, eval_loader, device, threshold)
+            metrics = _evaluate_global_model(eval_model, eval_loader, runtime_cfg, threshold)
             stats.global_metrics = metrics
             for k, v in metrics.items():
                 run.track(
@@ -300,6 +300,9 @@ def train(CFG: omegaconf.DictConfig) -> None:
 
     torch.manual_seed(int(runtime_cfg.get("seed", 42)))
 
+    device = resolve_device(runtime_cfg)
+    print(f"===> Using device: {device}")
+
     save_path = training_cfg["save_path"]
     os.makedirs(save_path, exist_ok=True)
 
@@ -340,7 +343,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
             shuffle=False,
             num_workers=int(runtime_cfg.get("num_workers", 0)),
         )
-        eval_model = _build_model_fn(model_cfg)().to(runtime_cfg.get("device", "cpu"))
+        eval_model = _build_model_fn(model_cfg)().to(device)
 
     on_round_end = _build_round_callback(
         run=run,
@@ -348,7 +351,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
         eval_model=eval_model,
         eval_freq=int(evaluation_cfg.get("freq_rounds", 0) or 0),
         threshold=float(evaluation_cfg.get("threshold", 0.1)),
-        device=runtime_cfg.get("device", "cpu"),
+        runtime_cfg=runtime_cfg,
     )
 
     num_rounds = int(training_cfg["num_rounds"])

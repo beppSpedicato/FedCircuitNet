@@ -41,7 +41,7 @@ import omegaconf
 import pandas as pd
 import torch
 import torch.nn as nn
-from aim import Run
+from aim import Distribution, Run
 from torch.utils.data import DataLoader
 
 _HERE = Path(__file__).resolve().parent
@@ -98,6 +98,59 @@ def _build_partitioner(part_cfg: Dict[str, Any]):
             f"Unknown partitioning.type={ptype!r}; known: {list(PARTITIONER_REGISTRY)}"
         )
     return PARTITIONER_REGISTRY[ptype](**kwargs)
+
+
+def _track_partition_distribution(
+    run: Run,
+    partitioner,
+    metadata_df: pd.DataFrame,
+) -> None:
+    """Log per-partition sample counts and per-feature value distributions.
+
+    Emitted metrics (step=0):
+      * ``partitions``                 -- histogram of samples per partition.
+      * ``partitions/<feature>``       -- one Distribution per partition (via
+        ``context={"partition_id": i}``) of that feature's category counts,
+        aligned to a shared, globally sorted category index so partitions
+        can be overlaid in Aim.
+
+    ``partitioner.partition`` is invoked here for the tracking snapshot;
+    the strategy will invoke it again inside ``train()``.  This assumes
+    the partitioner is deterministic under a fixed seed (true for
+    :class:`IIDPartitioner`).
+    """
+    partitions = partitioner.partition(metadata_df)
+    partitions_len = [len(p) for p in partitions]
+    run.track(
+        Distribution.from_histogram(partitions_len, (0, len(partitions))),
+        name="partitions",
+        step=0,
+    )
+
+    stratify_cols = getattr(partitioner, "stratify_cols", None) or [
+        c for c in metadata_df.columns if c != "filename"
+    ]
+    for col in stratify_cols:
+        if col not in metadata_df.columns:
+            continue
+        unique_vals = sorted(metadata_df[col].astype(str).unique().tolist())
+        n_vals = len(unique_vals)
+        if n_vals == 0:
+            continue
+        for i, part in enumerate(partitions):
+            counts = (
+                part[col]
+                .astype(str)
+                .value_counts()
+                .reindex(unique_vals, fill_value=0)
+                .to_numpy()
+            )
+            run.track(
+                Distribution.from_histogram(counts, (0, n_vals)),
+                name=f"partitions/{col}",
+                context={"partition_id": int(i)},
+                step=0,
+            )
 
 
 def _evaluate_global_model(
@@ -264,6 +317,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
         f"===> Partitioner: {partitioner.__class__.__name__} "
         f"(n_partitions={partitioner.n_partitions})"
     )
+    _track_partition_distribution(run, partitioner, metadata_df)
 
     print(f"===> Building strategy: {strategy_cfg['type']}")
     strategy = build_strategy(strategy_cfg, runtime_cfg)

@@ -4,8 +4,8 @@ from typing import Callable, Iterable, List, Optional
 import numpy as np
 import torch.nn as nn
 
-from ...base import Aggregator, FederatedClient, StateDict
-from ...statistics import ClientRoundStats, RoundStats
+from .base import Aggregator, FederatedClient, StateDict
+from .statistics import ClientRoundStats, RoundStats
 
 
 class FederatedServer:

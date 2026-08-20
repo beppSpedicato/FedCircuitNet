@@ -30,7 +30,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from .base import Aggregator, FederatedClient, StateDict
-from .strategies.fedavg.server import FederatedServer
+from .server import FederatedServer
 from .statistics import RoundStats, TrainingHistory
 
 if TYPE_CHECKING:

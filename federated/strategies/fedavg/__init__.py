@@ -12,7 +12,6 @@ import torch.nn as nn
 
 from .aggregation import WeightedAverageAggregator
 from .client import FedAvgClient
-from .server import FederatedServer
 from .strategy import FedAvgStrategy
 
 
@@ -58,7 +57,6 @@ def build_fedavg(
 __all__ = [
     "FedAvgClient",
     "FedAvgStrategy",
-    "FederatedServer",
     "LOSS_REGISTRY",
     "WeightedAverageAggregator",
     "build_fedavg",

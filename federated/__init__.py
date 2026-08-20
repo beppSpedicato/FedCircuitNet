@@ -8,7 +8,7 @@ from .base import (
 )
 from .strategies.fedavg.client import FedAvgClient
 from .strategies.fedavg.strategy import FedAvgStrategy
-from .strategies.fedavg.server import FederatedServer
+from .server import FederatedServer
 from .statistics import ClientRoundStats, RoundStats, TrainingHistory
 from .strategy import FederatedStrategy
 

@@ -10,15 +10,18 @@ class IIDPartitioner(DatasetPartitioner):
     """Partitions the CircuitNet-N28 dataset into IID subsets.
 
     Each partition mirrors the global distribution of design-configuration
-    parameters (and optionally label severity tiers) through round-robin
-    assignment within every stratum defined by a composite categorical key.
+    parameters (and optionally label severity tiers).  Within every stratum
+    defined by a composite categorical key, samples are shuffled and then
+    split as evenly as possible across the ``n_partitions`` clients; when a
+    stratum size is not a multiple of ``n_partitions`` the leftover samples
+    go to the partitions that are currently the smallest, so overall
+    partition sizes stay balanced.
 
     Args:
         n_partitions: Number of subsets to produce.
         mode: Stratification scope:
             - ``"features"`` (default): stratify on design-configuration
-              columns only (design_name, macro_count, macro_placement,
-              power_mesh, filler_insertion).
+              columns only (design_name, utilization, clock).
             - ``"features_label"``: also include the label tier column so
               each partition contains a proportional mix of DRC severity
               levels.  Requires the DataFrame to carry a ``tier`` column,
@@ -33,10 +36,8 @@ class IIDPartitioner(DatasetPartitioner):
 
     _DEFAULT_STRATIFY_COLS: List[str] = [
         "design_name",
-        "macro_count",
-        "macro_placement",
-        "power_mesh",
-        "filler_insertion",
+        "utilization",
+        "clock",
     ]
 
     def __init__(
@@ -89,10 +90,29 @@ class IIDPartitioner(DatasetPartitioner):
         )
 
         assignment = np.empty(len(df), dtype=int)
+        # Within each stratum, split shuffled samples into `n_partitions` chunks
+        # of near-equal size (n // K each, remainder r spread one-per-partition).
+        # The r "extra" samples are handed to whichever partitions are globally
+        # smallest so partition sizes stay balanced overall -- avoids the bias
+        # of always awarding the extras to partitions [0, ..., r-1].
+        sizes = np.zeros(self.n_partitions, dtype=int)
         for group_positions in df.groupby(strat_key).groups.values():
             positions = np.array(group_positions)
             rng.shuffle(positions)
-            assignment[positions] = np.arange(len(positions)) % self.n_partitions
+
+            n = len(positions)
+            base, remainder = divmod(n, self.n_partitions)
+            per_partition = np.full(self.n_partitions, base, dtype=int)
+            if remainder:
+                extras = np.argsort(sizes, kind="stable")[:remainder]
+                per_partition[extras] += 1
+
+            cursor = 0
+            for p in range(self.n_partitions):
+                take = per_partition[p]
+                assignment[positions[cursor : cursor + take]] = p
+                cursor += take
+            sizes += per_partition
 
         return [
             df[assignment == i].reset_index(drop=True)

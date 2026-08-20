@@ -20,8 +20,8 @@ data:
   metadata_csv: ./files/train_N28.csv
   # Each sample is expected at `${feature_dir}/${filename}.npy`
   # and `${label_dir}/${filename}.npy`.
-  feature_dir: ./training_set/DRC/feature
-  label_dir:   ./training_set/DRC/label
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
 
 # ---------------------------------------------------------------------------
 # Partitioning
@@ -56,7 +56,7 @@ strategy:
 # Runtime (shared across all strategies)
 # ---------------------------------------------------------------------------
 runtime:
-  device: cpu              # e.g. "cuda:0"
+  device: cuda:0              # e.g. "cuda:0"
   num_workers: 0
   seed: 42
   shuffle: true

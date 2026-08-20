@@ -15,8 +15,8 @@ experiment: fedavg_drc_test
 data:
   # Produced by `build_all_metadata.sh` from the upstream ann-file CSVs.
   metadata_csv: ./files/test_N28.csv
-  feature_dir: ./training_set/DRC/feature
-  label_dir:   ./training_set/DRC/label
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
 
 # ---------------------------------------------------------------------------
 # Model + checkpoint
@@ -36,7 +36,7 @@ checkpoint: ./work_dirs/fedavg_pilot/global_model_final.pth
 # Runtime
 # ---------------------------------------------------------------------------
 runtime:
-  device: cpu
+  device: cuda:0
   num_workers: 0
   seed: 42
 

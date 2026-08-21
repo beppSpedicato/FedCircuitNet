@@ -155,6 +155,7 @@ class FederatedStrategy(ABC):
             clients=clients,
             aggregator=self._build_aggregator(),
             seed=self.seed,
+            device=self.device,
         )
 
         history = TrainingHistory(partition_sizes=[c.num_samples for c in clients])

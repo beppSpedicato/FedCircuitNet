@@ -30,20 +30,3 @@ class RoundStats:
     aggregation_time_s: float
     round_time_s: float
     global_metrics: Optional[Dict[str, float]] = None
-
-
-@dataclass
-class TrainingHistory:
-    """Full history returned by :meth:`FedAvgStrategy.train`."""
-
-    partition_sizes: List[int] = field(default_factory=list)
-    rounds: List[RoundStats] = field(default_factory=list)
-
-    def append_round(self, stats: RoundStats) -> None:
-        self.rounds.append(stats)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "partition_sizes": list(self.partition_sizes),
-            "rounds": [asdict(r) for r in self.rounds],
-        }

@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from .base import Aggregator, FederatedClient, StateDict
 from .server import FederatedServer
-from .statistics import RoundStats, TrainingHistory
+from .statistics import RoundStats
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -71,7 +71,6 @@ class FederatedStrategy(ABC):
         self.shuffle = shuffle
 
         self._server: Optional[FederatedServer] = None
-        self._history: Optional[TrainingHistory] = None
 
     @abstractmethod
     def _build_client(
@@ -100,8 +99,8 @@ class FederatedStrategy(ABC):
         on_round_end: Optional[RoundEndCallback] = None,
         save_every: int = 0,
         save_dir: Optional[str] = None,
-    ) -> TrainingHistory:
-        """Run the full FL training pipeline and return a :class:`TrainingHistory`.
+    ):
+        """Run the full FL training pipeline.
 
         Args:
             partitioner: Splits ``metadata_df`` into per-client subsets.
@@ -154,8 +153,6 @@ class FederatedStrategy(ABC):
             device=self.device,
         )
 
-        history = TrainingHistory(partition_sizes=[c.num_samples for c in clients])
-
         eval_model: Optional[nn.Module] = None
         if global_eval_fn is not None and global_eval_loader is not None:
             eval_model = model_fn().to(self.device)
@@ -169,7 +166,6 @@ class FederatedStrategy(ABC):
                     eval_model, global_eval_loader, self.device
                 )
 
-            history.append_round(stats)
 
             if save_every > 0 and stats.round_idx % save_every == 0:
                 self._save_checkpoint(stats.round_idx, save_dir)  # type: ignore[arg-type]
@@ -177,8 +173,8 @@ class FederatedStrategy(ABC):
             if on_round_end is not None:
                 on_round_end(stats, self._server.global_state)
 
-        self._history = history
-        return history
+        return [c.num_samples for c in clients], stats
+
 
     def _save_checkpoint(self, round_idx: int, save_dir: str) -> str:
         """Persist the current global state to ``save_dir``.
@@ -200,9 +196,3 @@ class FederatedStrategy(ABC):
         if self._server is None:
             raise RuntimeError("Call train() before accessing global_state.")
         return self._server.global_state
-
-    @property
-    def history(self) -> TrainingHistory:
-        if self._history is None:
-            raise RuntimeError("Call train() before accessing history.")
-        return self._history

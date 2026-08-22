@@ -33,7 +33,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import hydra
 import numpy as np
@@ -43,65 +43,20 @@ import torch
 import torch.nn as nn
 from aim import Distribution, Run
 from torch.utils.data import DataLoader
-from sklearn.metrics import average_precision_score, roc_auc_score
+from federated.base import StateDict
+from federated.statistics import RoundStats
+from models import _build_model_fn
+from partitioning import _build_partitioner
 from utils.metrics import build_metric
 from utils.seed import set_random_seed
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
-from datasets.drc_dataset import DRCDataset  # noqa: E402
-from utils.device import features_to_device, resolve_device  # noqa: E402
-from federated.strategies import build_strategy  # noqa: E402
-from models.routenet import RouteNet  # noqa: E402
-from partitioning.iid import IIDPartitioner  # noqa: E402
-from utils.losses import build_loss  # noqa: E402
-
-PARTITIONER_REGISTRY: Dict[str, type] = {
-    "iid": IIDPartitioner,
-}
-
-MODEL_REGISTRY: Dict[str, type] = {
-    "RouteNet": RouteNet,
-}
-
-
-def _build_model_fn(model_cfg: Dict[str, Any]) -> Callable[[], nn.Module]:
-    mtype = model_cfg["type"]
-    if mtype not in MODEL_REGISTRY:
-        raise ValueError(
-            f"Unknown model.type={mtype!r}; known: {list(MODEL_REGISTRY)}"
-        )
-    cls = MODEL_REGISTRY[mtype]
-    in_channels = int(model_cfg["in_channels"])
-    out_channels = int(model_cfg["out_channels"])
-
-    def _make() -> nn.Module:
-        model = cls(in_channels=in_channels, out_channels=out_channels)
-        model.init_weights()
-        return model
-
-    return _make
-
-
-def _build_dataset_fn(data_cfg: Dict[str, Any]) -> Callable[[pd.DataFrame], DRCDataset]:
-    feature_dir = data_cfg["feature_dir"]
-    label_dir = data_cfg["label_dir"]
-
-    def _make(part_df: pd.DataFrame) -> DRCDataset:
-        return DRCDataset(part_df, feature_dir=feature_dir, label_dir=label_dir)
-
-    return _make
-
-
-def _build_partitioner(part_cfg: Dict[str, Any]):
-    kwargs = dict(part_cfg)
-    ptype = kwargs.pop("type")
-    if ptype not in PARTITIONER_REGISTRY:
-        raise ValueError(
-            f"Unknown partitioning.type={ptype!r}; known: {list(PARTITIONER_REGISTRY)}"
-        )
-    return PARTITIONER_REGISTRY[ptype](**kwargs)
+from datasets import _build_dataset_fn
+from utils.device import features_to_device, resolve_device
+from federated.strategies import build_strategy
+from utils.losses import build_loss
 
 
 def _track_partition_distribution(
@@ -141,7 +96,6 @@ def _track_partition_distribution(
                 context={"partition_id": int(i)},
                 step=0,
             )
-
 
 def _evaluate_global_model(
     model: nn.Module,
@@ -195,7 +149,7 @@ def _build_round_callback(
     ``save_dir``) -- keep it out of the callback.
     """
 
-    def on_round_end(stats, global_state):
+    def on_round_end(stats: RoundStats, global_state: StateDict):
         for c in stats.client_stats:
             run.track(
                 value=c.train_loss,
@@ -314,11 +268,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
     if eval_csv:
         print(f"===> Building eval loader from {eval_csv}")
         eval_df = pd.read_csv(eval_csv)
-        eval_ds = DRCDataset(
-            eval_df,
-            feature_dir=data_cfg["feature_dir"],
-            label_dir=data_cfg["label_dir"],
-        )
+        eval_ds = _build_dataset_fn(data_cfg)(eval_df)
         eval_loader = DataLoader(
             eval_ds,
             batch_size=int(evaluation_cfg.get("batch_size", 4)),
@@ -339,7 +289,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
     num_rounds = int(training_cfg["num_rounds"])
     save_every = int(training_cfg.get("save_freq_rounds", 0) or 0)
     print(f"===> Running {num_rounds} rounds (save_every={save_every})")
-    history = strategy.train(
+    partition_sizes, stats = strategy.train(
         partitioner=partitioner,
         metadata_df=metadata_df,
         model_fn=_build_model_fn(model_cfg),
@@ -355,27 +305,15 @@ def train(CFG: omegaconf.DictConfig) -> None:
     torch.save({"state_dict": strategy.global_state}, final_ckpt)
     run.log_info(f"Final model saved to {final_ckpt}")
 
-    history_json_path = os.path.join(save_path, "history.json")
-    history.save_json(history_json_path)
-    run.log_info(f"History JSON saved to {history_json_path}")
-
-    history_csv_path = os.path.join(save_path, "history.csv")
-    history.to_dataframe().to_csv(history_csv_path, index=False)
-    run.log_info(f"History CSV saved to {history_csv_path}")
-
     run["summary"] = {
         "strategy": strategy_cfg["type"],
-        "partition_sizes": list(history.partition_sizes),
-        "num_rounds": len(history.rounds),
+        "partition_sizes": list(partition_sizes),
         "final_mean_train_loss": (
-            float(np.mean([c.train_loss for c in history.rounds[-1].client_stats]))
-            if history.rounds and history.rounds[-1].client_stats
-            else None
+            float(np.mean([c.train_loss for c in stats.client_stats]))
         ),
     }
 
-    print(f"===> Done. Partition sizes: {history.partition_sizes}")
-
+    print(f"===> Done. Partition sizes: {partition_sizes}, final mean train loss: {run['summary']['final_mean_train_loss']:.4f}")
 
 if __name__ == "__main__":
     train()

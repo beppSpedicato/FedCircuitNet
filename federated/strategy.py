@@ -51,7 +51,6 @@ class FederatedStrategy(ABC):
     Args:
         batch_size: Minibatch size (``B``) used by all per-client loaders.
         device: Device on which local training and evaluation run.
-        seed: Seed for the server-side RNG.
         num_workers: ``DataLoader`` worker count for client loaders.
         shuffle: Whether client loaders shuffle each local epoch.
     """
@@ -60,7 +59,6 @@ class FederatedStrategy(ABC):
         self,
         batch_size: int,
         device: str = "cpu",
-        seed: int = 42,
         num_workers: int = 0,
         shuffle: bool = True,
     ) -> None:
@@ -69,7 +67,6 @@ class FederatedStrategy(ABC):
 
         self.batch_size = batch_size
         self.device = device
-        self.seed = seed
         self.num_workers = num_workers
         self.shuffle = shuffle
 
@@ -154,7 +151,6 @@ class FederatedStrategy(ABC):
             model_fn=model_fn,
             clients=clients,
             aggregator=self._build_aggregator(),
-            seed=self.seed,
             device=self.device,
         )
 

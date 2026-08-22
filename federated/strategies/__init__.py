@@ -37,7 +37,7 @@ def build_strategy(
             Must contain a ``type`` field naming an entry in
             :data:`STRATEGY_REGISTRY`; remaining fields are forwarded to
             the factory.
-        runtime_cfg: The ``runtime`` block (device, seed, num_workers).
+        runtime_cfg: The ``runtime`` block (device, num_workers).
     """
     stype = strategy_cfg.get("type")
     if stype is None:

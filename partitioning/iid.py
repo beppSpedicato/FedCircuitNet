@@ -31,7 +31,6 @@ class IIDPartitioner(DatasetPartitioner):
             silently skipped.
         label_tier_col: Name of the integer tier column.  Only used when
             ``mode="features_label"``.  Defaults to ``"tier"``.
-        seed: Random seed for reproducible shuffling within each stratum.
     """
 
     _DEFAULT_STRATIFY_COLS: List[str] = [
@@ -46,7 +45,6 @@ class IIDPartitioner(DatasetPartitioner):
         mode: str = "features",
         stratify_cols: Optional[List[str]] = None,
         label_tier_col: str = "tier",
-        seed: int = 42,
     ) -> None:
         super().__init__(n_partitions)
         if mode not in ("features", "features_label"):
@@ -54,7 +52,6 @@ class IIDPartitioner(DatasetPartitioner):
         self.mode = mode
         self.stratify_cols = stratify_cols or self._DEFAULT_STRATIFY_COLS
         self.label_tier_col = label_tier_col
-        self.seed = seed
 
     def partition(self, df: pd.DataFrame) -> List[pd.DataFrame]:
         """Return ``n_partitions`` IID subsets of *df*.
@@ -76,7 +73,6 @@ class IIDPartitioner(DatasetPartitioner):
             )
 
         df = df.copy().reset_index(drop=True)
-        rng = np.random.default_rng(self.seed)
 
         stratify = list(self.stratify_cols)
         if self.mode == "features_label":
@@ -98,7 +94,7 @@ class IIDPartitioner(DatasetPartitioner):
         sizes = np.zeros(self.n_partitions, dtype=int)
         for group_positions in df.groupby(strat_key).groups.values():
             positions = np.array(group_positions)
-            rng.shuffle(positions)
+            np.random.shuffle(positions)
 
             n = len(positions)
             base, remainder = divmod(n, self.n_partitions)

@@ -35,7 +35,6 @@ class FedAvgStrategy(FederatedStrategy):
         batch_size: Local minibatch size (``B``).
         loss_fn: Loss applied to ``(model(x), y)`` during local training.
         device: Device for local training / evaluation.
-        seed: Server-side RNG seed.
         num_workers: ``DataLoader`` worker count for client loaders.
         shuffle: Whether client loaders shuffle each local epoch.
         aggregator: Optional override for the merge -- kept optional so
@@ -50,7 +49,6 @@ class FedAvgStrategy(FederatedStrategy):
         batch_size: int,
         loss_fn: LossFn,
         device: str = "cpu",
-        seed: int = 42,
         num_workers: int = 0,
         shuffle: bool = True,
         aggregator: Optional[Aggregator] = None,
@@ -58,7 +56,6 @@ class FedAvgStrategy(FederatedStrategy):
         super().__init__(
             batch_size=batch_size,
             device=device,
-            seed=seed,
             num_workers=num_workers,
             shuffle=shuffle,
         )

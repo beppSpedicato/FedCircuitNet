@@ -47,32 +47,3 @@ class TrainingHistory:
             "partition_sizes": list(self.partition_sizes),
             "rounds": [asdict(r) for r in self.rounds],
         }
-
-    def to_dataframe(self):
-        """Return a long-format DataFrame with one row per (round, client)."""
-        import pandas as pd
-
-        records: List[Dict[str, Any]] = []
-        for r in self.rounds:
-            global_metrics = r.global_metrics or {}
-            for c in r.client_stats:
-                records.append(
-                    {
-                        "round": r.round_idx,
-                        "client_id": c.client_id,
-                        "num_samples": c.num_samples,
-                        "train_loss": c.train_loss,
-                        "num_local_steps": c.num_local_steps,
-                        "local_update_time_s": c.local_update_time_s,
-                        "aggregation_time_s": r.aggregation_time_s,
-                        "round_time_s": r.round_time_s,
-                        **{f"global_{k}": v for k, v in global_metrics.items()},
-                    }
-                )
-        return pd.DataFrame.from_records(records)
-
-    def save_json(self, path: str) -> None:
-        import json
-
-        with open(path, "w") as fh:
-            json.dump(self.to_dict(), fh, indent=2)

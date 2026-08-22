@@ -50,7 +50,6 @@ class FederatedServer:
         model_fn: Callable[[], nn.Module],
         clients: Iterable[FederatedClient],
         aggregator: Aggregator,
-        seed: int = 42,
         device: DeviceLike = None,
         max_parallel_clients: Optional[int] = None,
     ) -> None:
@@ -61,7 +60,6 @@ class FederatedServer:
             raise ValueError("At least one client is required.")
 
         self.aggregator = aggregator
-        self._rng = np.random.default_rng(seed)
         self._round_counter = 0
 
         init_model = model_fn()

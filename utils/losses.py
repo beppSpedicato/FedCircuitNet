@@ -8,11 +8,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+LOSS_REGISTRY = ["L1Loss", "MSELoss", "BiasedMSELoss"]
 __all__ = ["L1Loss", "MSELoss", "BiasedMSELoss", "build_loss"]
 
 
 def build_loss(opt):
+    if opt['loss_type'] not in LOSS_REGISTRY:
+        raise ValueError(
+            f"Unknown loss_type={opt['loss_type']!r}; known: {list(LOSS_REGISTRY)}"
+        )
+    
     loss_type = opt.pop("loss_type")
     if loss_type == "BiasedMSELoss":
         return globals()[loss_type](

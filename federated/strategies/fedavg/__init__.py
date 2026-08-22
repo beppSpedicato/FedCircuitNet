@@ -13,15 +13,8 @@ import torch.nn as nn
 from .aggregation import WeightedAverageAggregator
 from .client import FedAvgClient
 from .strategy import FedAvgStrategy
-from ...device import resolve_device
-
-
-LOSS_REGISTRY: Dict[str, type] = {
-    "MSELoss": nn.MSELoss,
-    "L1Loss": nn.L1Loss,
-    "BCELoss": nn.BCELoss,
-    "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
-}
+from ....utils.device import resolve_device
+from ....utils.losses import build_loss
 
 
 def build_fedavg(
@@ -36,21 +29,16 @@ def build_fedavg(
             ``learning_rate``, ``batch_size``, ``loss_type``.
         runtime_cfg: Contents of the ``runtime`` block (``cpu`` / ``gpu``
             / ``gpu_id`` as in ``code_examples/CircuitNet/drc_prediction/train.py``,
-            plus ``seed``, ``num_workers``, ``shuffle``).
+            plus , ``num_workers``, ``shuffle``).
     """
-    loss_type = strategy_cfg.get("loss_type", "MSELoss")
-    if loss_type not in LOSS_REGISTRY:
-        raise ValueError(
-            f"Unknown loss_type={loss_type!r}; known: {list(LOSS_REGISTRY)}"
-        )
+    loss_fn: nn.Module = build_loss(strategy_cfg)
 
     return FedAvgStrategy(
         local_epochs=int(strategy_cfg["local_epochs"]),
         learning_rate=float(strategy_cfg["learning_rate"]),
         batch_size=int(strategy_cfg["batch_size"]),
-        loss_fn=LOSS_REGISTRY[loss_type](),
+        loss_fn=loss_fn,
         device=resolve_device(runtime_cfg),
-        seed=int(runtime_cfg.get("seed", 42)),
         num_workers=int(runtime_cfg.get("num_workers", 0)),
         shuffle=bool(runtime_cfg.get("shuffle", True)),
     )
@@ -59,7 +47,6 @@ def build_fedavg(
 __all__ = [
     "FedAvgClient",
     "FedAvgStrategy",
-    "LOSS_REGISTRY",
     "WeightedAverageAggregator",
     "build_fedavg",
 ]

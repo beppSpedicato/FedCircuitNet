@@ -47,17 +47,22 @@ model:
 # factory.  For FedAvg (McMahan et al. 2017): E, eta, B, loss.
 strategy:
   type: fedavg
-  local_epochs: 1          # E
+  local_epochs: 10         # E
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
-  loss_type: MSELoss
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
 
 # ---------------------------------------------------------------------------
 # Runtime (shared across all strategies)
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false                  # if true, ignore `gpu` and run on CPU
-  gpu: 0                      # CUDA device index (used unless cpu: true)
+  gpu: 1                      # CUDA device index (used unless cpu: true)
   num_workers: 0
   seed: 42
   shuffle: true
@@ -66,7 +71,7 @@ runtime:
 # Training loop
 # ---------------------------------------------------------------------------
 training:
-  num_rounds: 100          # T -- communication rounds
+  num_rounds: 50          # T -- communication rounds
   save_path: ./work_dirs/fedavg_pilot
   save_freq_rounds: 10     # 0 disables periodic checkpoints
 

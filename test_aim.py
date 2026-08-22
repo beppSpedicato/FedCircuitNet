@@ -39,9 +39,9 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
-from federated.device import features_to_device, resolve_device  # noqa: E402
+from utils.device import features_to_device, resolve_device  # noqa: E402
 from models.routenet import RouteNet  # noqa: E402
-from test_utils import build_metric, roc_prc, multi_process_score, set_random_seed  # noqa: E402
+from utils import build_metric, roc_prc, multi_process_score, set_random_seed  # noqa: E402
 
 
 MODEL_REGISTRY: Dict[str, type] = {

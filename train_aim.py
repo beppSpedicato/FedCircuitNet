@@ -43,16 +43,19 @@ import torch
 import torch.nn as nn
 from aim import Distribution, Run
 from torch.utils.data import DataLoader
+from sklearn.metrics import average_precision_score, roc_auc_score
+from utils.metrics import build_metric
+from utils.seed import set_random_seed
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
-from federated.device import features_to_device, resolve_device  # noqa: E402
+from utils.device import features_to_device, resolve_device  # noqa: E402
 from federated.strategies import build_strategy  # noqa: E402
 from models.routenet import RouteNet  # noqa: E402
 from partitioning.iid import IIDPartitioner  # noqa: E402
-
+from utils.losses import build_loss  # noqa: E402
 
 PARTITIONER_REGISTRY: Dict[str, type] = {
     "iid": IIDPartitioner,
@@ -106,20 +109,6 @@ def _track_partition_distribution(
     partitioner,
     metadata_df: pd.DataFrame,
 ) -> None:
-    """Log per-partition sample counts and per-feature value distributions.
-
-    Emitted metrics (step=0):
-      * ``partitions``                 -- histogram of samples per partition.
-      * ``partitions/<feature>``       -- one Distribution per partition (via
-        ``context={"partition_id": i}``) of that feature's category counts,
-        aligned to a shared, globally sorted category index so partitions
-        can be overlaid in Aim.
-
-    ``partitioner.partition`` is invoked here for the tracking snapshot;
-    the strategy will invoke it again inside ``train()``.  This assumes
-    the partitioner is deterministic under a fixed seed (true for
-    :class:`IIDPartitioner`).
-    """
     partitions = partitioner.partition(metadata_df)
     partitions_len = [len(p) for p in partitions]
     run.track(
@@ -158,47 +147,39 @@ def _evaluate_global_model(
     model: nn.Module,
     loader: DataLoader,
     runtime_cfg: Dict[str, Any],
-    threshold: float,
+    strategy_cfg: Dict[str, Any]
 ) -> Dict[str, float]:
     """Return pixel MSE + optional ROC-AUC / PR-AUC on the eval loader."""
-    from sklearn.metrics import average_precision_score, roc_auc_score
 
     model.eval()
-    loss_fn = nn.MSELoss()
-
-    total_loss = 0.0
-    n_batches = 0
-    y_true_chunks: list = []
-    y_pred_chunks: list = []
+    loss_fn = build_loss(strategy_cfg)
+    metrics = {k: build_metric(k) for k in strategy_cfg['eval_metric']}
+    avg_metrics = {k: 0.0 for k in metrics.keys()}
+    avg_loss = 0.0
+    n = 0
 
     with torch.no_grad():
         for feature, label in loader:
-            feature, label = features_to_device(feature, label, runtime_cfg)
-            prediction = model(feature)
+            input, target = features_to_device(feature, label, runtime_cfg)
 
-            total_loss += float(loss_fn(prediction, label).item())
-            n_batches += 1
+            prediction = model(input)
+            avg_loss += loss_fn(prediction, target).item()
 
-            y_true_chunks.append(
-                (label.cpu().numpy() >= threshold).astype(np.uint8).ravel()
-            )
-            y_pred_chunks.append(prediction.cpu().numpy().ravel())
+            pred_cpu = prediction.squeeze(1).detach().cpu()
+            tgt_cpu = target.cpu()
+            for name, fn in metrics.items():
+                v = fn(tgt_cpu, pred_cpu)
+                if v != 1:
+                    avg_metrics[name] += float(v)
 
-    y_true = np.concatenate(y_true_chunks) if y_true_chunks else np.array([])
-    y_pred = np.concatenate(y_pred_chunks) if y_pred_chunks else np.array([])
-
-    metrics: Dict[str, float] = {
-        "pixel_mse": total_loss / n_batches if n_batches else float("nan"),
-    }
-    if y_true.size and 0 < y_true.mean() < 1:
-        metrics["roc_auc"] = float(roc_auc_score(y_true, y_pred))
-        metrics["pr_auc"] = float(average_precision_score(y_true, y_pred))
-    else:
-        metrics["roc_auc"] = float("nan")
-        metrics["pr_auc"] = float("nan")
-
-    return metrics
-
+            n += 1
+    if n > 0:
+        avg_loss /= n
+        for k in avg_metrics:
+            avg_metrics[k] /= n
+    
+    model.train()
+    return avg_loss, avg_metrics
 
 def _build_round_callback(
     run: Run,
@@ -257,18 +238,19 @@ def _build_round_callback(
             and stats.round_idx % eval_freq == 0
         ):
             eval_model.load_state_dict(global_state)
-            metrics = _evaluate_global_model(eval_model, eval_loader, runtime_cfg, threshold)
-            stats.global_metrics = metrics
-            for k, v in metrics.items():
+            val_loss, val_metrics = _evaluate_global_model(eval_model, eval_loader, runtime_cfg, threshold)
+            stats.global_metrics = val_metrics
+            run.track(val_loss, name=f"Val avg Loss", context={"subset": "val"}, step=stats.round_idx)
+            for k, v in val_metrics.items():
                 run.track(
-                    v,
+                    value=v,
                     name=f"Val {k}",
-                    context={"subset": "val"},
+                    context={'subset': 'val'},
                     step=stats.round_idx,
                 )
             print(
                 f"[val round {stats.round_idx}] "
-                + " ".join(f"{k}={v:.4f}" for k, v in metrics.items())
+                + " ".join(f"{k}={v:.4f}" for k, v in val_metrics.items())
             )
 
         losses_str = f"mean_loss={mean_loss:.4f}" if losses else "no_updates"
@@ -298,7 +280,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
     training_cfg = resolved["training"]
     evaluation_cfg = resolved.get("evaluation") or {}
 
-    torch.manual_seed(int(runtime_cfg.get("seed", 42)))
+    set_random_seed(int(runtime_cfg.get("seed", 42)))
 
     device = resolve_device(runtime_cfg)
     print(f"===> Using device: {device}")

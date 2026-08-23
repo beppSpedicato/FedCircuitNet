@@ -45,6 +45,7 @@ class IIDPartitioner(DatasetPartitioner):
         mode: str = "features",
         stratify_cols: Optional[List[str]] = None,
         label_tier_col: str = "tier",
+        **kwargs
     ) -> None:
         super().__init__(n_partitions)
         if mode not in ("features", "features_label"):

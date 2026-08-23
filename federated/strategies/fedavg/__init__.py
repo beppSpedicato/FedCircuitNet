@@ -13,8 +13,8 @@ import torch.nn as nn
 from .aggregation import WeightedAverageAggregator
 from .client import FedAvgClient
 from .strategy import FedAvgStrategy
-from ....utils.device import resolve_device
-from ....utils.losses import build_loss
+from utils.device import resolve_device
+from utils.losses import build_loss
 
 
 def build_fedavg(

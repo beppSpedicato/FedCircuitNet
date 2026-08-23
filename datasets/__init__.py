@@ -1,4 +1,3 @@
-from turtle import pd
 from typing import Any, Callable, Dict
 import pandas as pd
 from .drc_dataset import DRCDataset

@@ -220,4 +220,5 @@ __marimo__/
 # aim
 .aim/
 work_dirs/
+work_dir/
 outputs/

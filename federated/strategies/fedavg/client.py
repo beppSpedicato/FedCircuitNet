@@ -58,10 +58,9 @@ class FedAvgClient(FederatedClient):
         model.load_state_dict(global_state)
         model.train()
 
+        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate,  betas=(0.9, 0.999), weight_decay=0.0001)
         cosine_lr = CosineRestartLr(self.learning_rate, [self.local_epochs], [1], 1e-7)
         cosine_lr.set_init_lr(optimizer)
-
-        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate,  betas=(0.9, 0.999), weight_decay=0.0001)
 
         loss_sum = 0.0
         n_steps = 0

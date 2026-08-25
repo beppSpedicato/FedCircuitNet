@@ -58,7 +58,7 @@ class FederatedStrategy(ABC):
     def __init__(
         self,
         batch_size: int,
-        device: str = "cpu",
+        device: torch.device = torch.device("cpu"),
         num_workers: int = 0,
         shuffle: bool = True,
     ) -> None:

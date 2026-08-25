@@ -62,7 +62,7 @@ strategy:
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false                  # if true, ignore `gpu` and run on CPU
-  gpu: 1                      # CUDA device index (used unless cpu: true)
+  gpu: 0                      # CUDA device index (used unless cpu: true)
   num_workers: 0
   seed: 42
   shuffle: true

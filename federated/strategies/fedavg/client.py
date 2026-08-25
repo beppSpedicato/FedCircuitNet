@@ -3,8 +3,11 @@ from typing import Callable, Tuple
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import torch.optim as optim
 
 from ...base import ClientMetrics, FederatedClient, StateDict
+from tqdm import tqdm
+from utils import CosineRestartLr
 
 
 class FedAvgClient(FederatedClient):
@@ -28,7 +31,7 @@ class FedAvgClient(FederatedClient):
         local_epochs: int,
         learning_rate: float,
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        device: str = "cpu",
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         if local_epochs < 1:
             raise ValueError(f"local_epochs must be >= 1, got {local_epochs}")
@@ -55,21 +58,32 @@ class FedAvgClient(FederatedClient):
         model.load_state_dict(global_state)
         model.train()
 
-        optimizer = torch.optim.SGD(model.parameters(), lr=self.learning_rate)
+        cosine_lr = CosineRestartLr(self.learning_rate, [self.local_epochs], [1], 1e-7)
+        cosine_lr.set_init_lr(optimizer)
+
+        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate,  betas=(0.9, 0.999), weight_decay=0.0001)
 
         loss_sum = 0.0
         n_steps = 0
-        for _ in range(self.local_epochs):
+    
+        with tqdm(total=self.local_epochs) as bar:
             for inputs, targets in self.data_loader:
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
+
+                regular_lr = cosine_lr.get_regular_lr(n_steps)
+                cosine_lr._set_lr(optimizer, regular_lr)
+                
                 optimizer.zero_grad()
                 loss = self.loss_fn(model(inputs), targets)
+                loss_sum += float(loss.item())
                 loss.backward()
                 optimizer.step()
-
-                loss_sum += float(loss.detach().item())
                 n_steps += 1
+                bar.update(1)
+
+                if n_steps % self.local_epochs == 0:
+                    break
 
         new_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
         metrics: ClientMetrics = {

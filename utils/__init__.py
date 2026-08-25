@@ -26,6 +26,7 @@ from .metrics import (
     roc_prc,
 )
 from .seed import set_random_seed
+from .lr import CosineRestartLr
 
 __all__ = [
     "BiasedMSELoss",
@@ -37,4 +38,5 @@ __all__ = [
     "multi_process_score",
     "roc_prc",
     "set_random_seed",
+    "CosineRestartLr",
 ]

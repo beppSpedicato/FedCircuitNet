@@ -1,0 +1,87 @@
+# Example configuration for train_aim.py.
+#
+# Config layout mirrors the code layout:
+#   - the `strategy` block's `type` selects an entry in
+#     federated.strategies.STRATEGY_REGISTRY (each key maps to
+#     federated/strategies/<id>/).  Remaining fields under `strategy` are
+#     forwarded to that strategy's factory.
+#   - `partitioning.type` selects a class from PARTITIONER_REGISTRY in
+#     train_aim.py (iid, kmeans, hierarchical).
+#   - `model.type` selects a class from MODEL_REGISTRY in train_aim.py.
+
+experiment: fedavg_drc_train
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/train_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Partitioning
+# ---------------------------------------------------------------------------
+# FedChip-style hierarchical (Ward linkage) partition: preprocess
+# (get_dummies + QuantileTransformer + StandardScaler + PCA) all
+# metadata columns, cluster with Ward hierarchical clustering into
+# `n_partitions` groups, then give each client `cluster_share` (80%)
+# of its own cluster plus a Dirichlet-distributed spillover of the
+# remaining 20%.
+partitioning:
+  type: hierarchical
+  n_partitions: 6
+  features: null            # null -> all non-identifier columns
+  cluster_share: 0.8
+  dirichlet_alpha: 0.5
+  random_state: 42
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNet
+  in_channels: 9
+  out_channels: 1
+
+# ---------------------------------------------------------------------------
+# Strategy
+# ---------------------------------------------------------------------------
+strategy:
+  type: fedavg
+  local_epochs: 100        # E
+  learning_rate: 2e-4      # eta
+  batch_size: 8            # B
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
+
+# ---------------------------------------------------------------------------
+# Runtime (shared across all strategies)
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+  seed: 42
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Training loop
+# ---------------------------------------------------------------------------
+training:
+  num_rounds: 100          # T -- communication rounds
+  save_path: ./work_dirs/fedavg_hierarchical
+  save_freq_rounds: 10     # 0 disables periodic checkpoints
+
+# ---------------------------------------------------------------------------
+# Optional held-out evaluation during training
+# ---------------------------------------------------------------------------
+evaluation:
+  metadata_csv: null       # e.g. ./metadata/n28_val.csv
+  batch_size: 4
+  freq_rounds: 5
+  threshold: 0.1

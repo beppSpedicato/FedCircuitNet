@@ -30,7 +30,7 @@ model:
 strategy:
   type: fedavg
 
-checkpoint: ./work_dirs/fedavg_pilot/global_model_final.pth
+checkpoint: ./work_dirs/fedavg_iid/global_model_final.pth
 
 # ---------------------------------------------------------------------------
 # Runtime
@@ -57,4 +57,4 @@ evaluation:
   # Directory root for artefacts.  Predictions land in `${save_path}/test_result/`
   # and the roc/prc CSV in `${save_path}/roc_prc.csv`.  Test metrics summary
   # is written to `${save_path}/test_metrics.json`.
-  save_path: ./work_dirs/fedavg_pilot
+  save_path: ./work_dirs/fedavg_iid

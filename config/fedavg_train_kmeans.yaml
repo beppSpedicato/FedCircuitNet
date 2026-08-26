@@ -6,30 +6,34 @@
 #     federated/strategies/<id>/).  Remaining fields under `strategy` are
 #     forwarded to that strategy's factory.
 #   - `partitioning.type` selects a class from PARTITIONER_REGISTRY in
-#     train_aim.py (currently: iid).
+#     train_aim.py (iid, kmeans, hierarchical).
 #   - `model.type` selects a class from MODEL_REGISTRY in train_aim.py.
 
-experiment: fedavg_drc_pilot
+experiment: fedavg_drc_train
 
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
 data:
-  # CSV with at least a `filename` column, one row per CircuitNet-N28 sample.
-  # Produced by `build_all_metadata.sh` from the upstream ann-file CSVs.
   metadata_csv: ./files/train_N28.csv
-  # Each sample is expected at `${feature_dir}/${filename}.npy`
-  # and `${label_dir}/${filename}.npy`.
   feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
   label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
 
 # ---------------------------------------------------------------------------
 # Partitioning
 # ---------------------------------------------------------------------------
+# FedChip-style K-means partition: preprocess (get_dummies +
+# QuantileTransformer + StandardScaler + PCA) all metadata columns,
+# cluster with K-means into `n_partitions` groups, then give each
+# client `cluster_share` (80%) of its own cluster plus a Dirichlet-
+# distributed spillover of the remaining 20%.
 partitioning:
-  type: iid
-  n_partitions: 5
-  seed: 42
+  type: kmeans
+  n_partitions: 6
+  features: null            # null -> all non-identifier columns
+  cluster_share: 0.8
+  dirichlet_alpha: 0.5
+  random_state: 42
 
 # ---------------------------------------------------------------------------
 # Model
@@ -42,12 +46,9 @@ model:
 # ---------------------------------------------------------------------------
 # Strategy
 # ---------------------------------------------------------------------------
-# `type` names a subpackage under federated.strategies.<id>.  The rest of
-# this block is passed as `strategy_cfg` to that package's build_<id>
-# factory.  For FedAvg (McMahan et al. 2017): E, eta, B, loss.
 strategy:
   type: fedavg
-  local_epochs: 100         # E
+  local_epochs: 100        # E
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
   loss_type: BiasedMSELoss
@@ -61,8 +62,8 @@ strategy:
 # Runtime (shared across all strategies)
 # ---------------------------------------------------------------------------
 runtime:
-  cpu: false                  # if true, ignore `gpu` and run on CPU
-  gpu: 0                      # CUDA device index (used unless cpu: true)
+  cpu: false
+  gpu: 0
   num_workers: 0
   seed: 42
   shuffle: true
@@ -71,16 +72,15 @@ runtime:
 # Training loop
 # ---------------------------------------------------------------------------
 training:
-  num_rounds: 100         # T -- communication rounds
-  save_path: ./work_dirs/fedavg_pilot
+  num_rounds: 100          # T -- communication rounds
+  save_path: ./work_dirs/fedavg_kmeans
   save_freq_rounds: 10     # 0 disables periodic checkpoints
 
 # ---------------------------------------------------------------------------
 # Optional held-out evaluation during training
 # ---------------------------------------------------------------------------
-# Set metadata_csv to null to disable in-loop validation entirely.
 evaluation:
   metadata_csv: null       # e.g. ./metadata/n28_val.csv
   batch_size: 4
-  freq_rounds: 5           # only used if metadata_csv is set
-  threshold: 0.1           # DRC label binarisation for ROC-AUC / PR-AUC
+  freq_rounds: 5
+  threshold: 0.1

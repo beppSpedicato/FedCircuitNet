@@ -8,16 +8,13 @@
 # the config pair:
 #     ./config/${CONFIG_PREFIX}_train_${ID}.yaml
 #     ./config/${CONFIG_PREFIX}_test_${ID}.yaml
-# An empty ID (`''`) selects the unsuffixed base configs
-# (`fedavg_train.yaml` / `fedavg_test.yaml`), which is the layout currently
-# shipped with the repo.
 #
 # Aim records every run under the experiment tag set inside each config.
 
 set -e
 
 CONFIG_PREFIX='fedavg'
-CONFIGS=('')
+CONFIGS=('iid' 'kmeans' 'hierarchical')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
@@ -26,15 +23,9 @@ echo "Starting sequential execution of ${#CONFIGS[@]} FedCircuitNet configuratio
 echo "Logs will be recorded by Aim."
 
 for ID in "${CONFIGS[@]}"; do
-    if [ -z "${ID}" ]; then
-        TRAIN_CFG="${CONFIG_PREFIX}_train"
-        TEST_CFG="${CONFIG_PREFIX}_test"
-        LABEL='<base>'
-    else
-        TRAIN_CFG="${CONFIG_PREFIX}_train_${ID}"
-        TEST_CFG="${CONFIG_PREFIX}_test_${ID}"
-        LABEL="${ID}"
-    fi
+    TRAIN_CFG="${CONFIG_PREFIX}_train_${ID}"
+    TEST_CFG="${CONFIG_PREFIX}_test_${ID}"
+    LABEL="${ID}"
 
     echo "=========================================================="
     echo "Running Configuration ID: ${LABEL}"

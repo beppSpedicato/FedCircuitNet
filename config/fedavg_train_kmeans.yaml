@@ -6,7 +6,8 @@
 #     federated/strategies/<id>/).  Remaining fields under `strategy` are
 #     forwarded to that strategy's factory.
 #   - `partitioning.type` selects a class from PARTITIONER_REGISTRY in
-#     train_aim.py (iid, kmeans, hierarchical).
+#     partitioning/__init__.py (iid, kmeans, dirichlet,
+#     feature_hierarchical).
 #   - `model.type` selects a class from MODEL_REGISTRY in train_aim.py.
 
 experiment: fedavg_drc_train

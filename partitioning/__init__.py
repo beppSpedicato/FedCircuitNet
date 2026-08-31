@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
-from .base import DatasetPartitioner
-from .clustering import HierarchicalClustering, KMeansClustering
+from .base import DatasetPartitioner, FedChipPartitioner
+from .clustering import KMeansClustering
 from .dirichlet import DirichletPartitioner
 from .feature_hierarchical import FeatureHierarchicalPartitioner
 from .iid import IIDPartitioner
@@ -9,7 +9,6 @@ from .iid import IIDPartitioner
 PARTITIONER_REGISTRY: Dict[str, type] = {
     "iid": IIDPartitioner,
     "kmeans": KMeansClustering,
-    "hierarchical": HierarchicalClustering,
     "dirichlet": DirichletPartitioner,
     "feature_hierarchical": FeatureHierarchicalPartitioner,
 }
@@ -27,8 +26,8 @@ __all__ = [
     "_build_partitioner",
     "DatasetPartitioner",
     "DirichletPartitioner",
+    "FedChipPartitioner",
     "FeatureHierarchicalPartitioner",
-    "HierarchicalClustering",
     "IIDPartitioner",
     "KMeansClustering",
 ]

@@ -14,7 +14,7 @@
 set -e
 
 CONFIG_PREFIX='fedavg'
-CONFIGS=('iid' 'kmeans' 'hierarchical' 'dirichlet' 'feature_hierarchical')
+CONFIGS=('iid' 'kmeans' 'dirichlet' 'feature_hierarchical')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"

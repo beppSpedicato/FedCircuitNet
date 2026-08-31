@@ -30,7 +30,7 @@ data:
 # per-level skew; larger alpha -> distribution flattens toward uniform.
 partitioning:
   type: dirichlet
-  n_partitions: 6
+  n_partitions: 20
   features:
     - design_name
     - clock

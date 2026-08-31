@@ -30,7 +30,7 @@ data:
 # distributed spillover of the remaining 20%.
 partitioning:
   type: kmeans
-  n_partitions: 6
+  n_partitions: 20
   features: null            # null -> all non-identifier columns
   cluster_share: 0.8
   dirichlet_alpha: 0.5

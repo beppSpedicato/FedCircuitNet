@@ -51,7 +51,7 @@ class FederatedServer:
         clients: Iterable[FederatedClient],
         aggregator: Aggregator,
         device: DeviceLike = None,
-        max_parallel_clients: Optional[int] = None,
+        max_parallel_clients: int = 5,
     ) -> None:
 
         self.model_fn = model_fn

@@ -4,7 +4,7 @@
 # run on a held-out CircuitNet-N28 DRC set using the same metrics and
 # ROC / PR-AUC computation as code_examples/CircuitNet/drc_prediction/test.py.
 
-experiment: fedavg_drc_test_feature_hierarchical
+experiment: fedavg_drc_test
 
 # ---------------------------------------------------------------------------
 # Data

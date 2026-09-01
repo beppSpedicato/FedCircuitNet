@@ -10,7 +10,7 @@
 #     feature_hierarchical).
 #   - `model.type` selects a class from MODEL_REGISTRY in train_aim.py.
 
-experiment: fedavg_drc_dirichlet
+experiment: fedavg_drc_train
 
 # ---------------------------------------------------------------------------
 # Data

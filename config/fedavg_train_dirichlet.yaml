@@ -28,6 +28,15 @@ data:
 # ("feat1|feat2|..."), and for every distinct composite level a fresh
 # Dirichlet(alpha) is drawn over the K clients.  Smaller alpha -> stronger
 # per-level skew; larger alpha -> distribution flattens toward uniform.
+#
+# Left un-preprocessed on purpose: this is the NIID-Bench baseline the
+# feature-hierarchical scheme is measured against, and ranking utilization
+# here would cut the composite label from 6x3x5 = 90 levels to 54, which
+# changes the baseline rather than the scheme under test.  To rank it
+# anyway (see PARTITIONING_ANALYSIS.md §4.1), uncomment:
+#
+#   preprocessing:
+#     - type: rank_utilization
 partitioning:
   type: dirichlet
   n_partitions: 20

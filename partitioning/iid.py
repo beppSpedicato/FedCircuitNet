@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,10 @@ class IIDPartitioner(DatasetPartitioner):
             silently skipped.
         label_tier_col: Name of the integer tier column.  Only used when
             ``mode="features_label"``.  Defaults to ``"tier"``.
+        preprocessing: See
+            :class:`~partitioning.base.DatasetPartitioner`.  Transforms
+            coarsen the strata only; the returned rows keep their raw
+            values unless a transform sets ``keep_in_output``.
     """
 
     _DEFAULT_STRATIFY_COLS: List[str] = [
@@ -45,9 +49,10 @@ class IIDPartitioner(DatasetPartitioner):
         mode: str = "features",
         stratify_cols: Optional[List[str]] = None,
         label_tier_col: str = "tier",
+        preprocessing: Any = None,
         **kwargs
     ) -> None:
-        super().__init__(n_partitions)
+        super().__init__(n_partitions, preprocessing=preprocessing)
         if mode not in ("features", "features_label"):
             raise ValueError(f"mode must be 'features' or 'features_label', got {mode!r}")
         self.mode = mode
@@ -74,16 +79,17 @@ class IIDPartitioner(DatasetPartitioner):
             )
 
         df = df.copy().reset_index(drop=True)
+        work, out = self._views(df)
 
         stratify = list(self.stratify_cols)
         if self.mode == "features_label":
             stratify.append(self.label_tier_col)
 
-        available = [c for c in stratify if c in df.columns]
+        available = [c for c in stratify if c in work.columns]
         strat_key = (
-            df[available].astype(str).agg("-".join, axis=1)
+            work[available].astype(str).agg("-".join, axis=1)
             if available
-            else pd.Series(["_all_"] * len(df), index=df.index)
+            else pd.Series(["_all_"] * len(work), index=work.index)
         )
 
         assignment = np.empty(len(df), dtype=int)
@@ -93,7 +99,7 @@ class IIDPartitioner(DatasetPartitioner):
         # smallest so partition sizes stay balanced overall -- avoids the bias
         # of always awarding the extras to partitions [0, ..., r-1].
         sizes = np.zeros(self.n_partitions, dtype=int)
-        for group_positions in df.groupby(strat_key).groups.values():
+        for group_positions in work.groupby(strat_key).groups.values():
             positions = np.array(group_positions)
             np.random.shuffle(positions)
 
@@ -112,6 +118,6 @@ class IIDPartitioner(DatasetPartitioner):
             sizes += per_partition
 
         return [
-            df[assignment == i].reset_index(drop=True)
+            out[assignment == i].reset_index(drop=True)
             for i in range(self.n_partitions)
         ]

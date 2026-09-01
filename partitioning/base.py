@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
 
-
+from .preprocessing import build_preprocessors
 
 
 class DatasetPartitioner(ABC):
@@ -18,12 +18,42 @@ class DatasetPartitioner(ABC):
     Expected input DataFrame columns (from the filename parsing convention):
         design_name, macro_count, clock_ns, utilization,
         macro_placement, power_mesh, filler_insertion, filename
+
+    Args:
+        n_partitions: Number of subsets to produce.
+        preprocessing: Optional ``partitioning.preprocessing`` block (see
+            :mod:`partitioning.preprocessing`).  Transforms listed here
+            reshape the metadata the grouping decision is taken on without
+            touching the rows that come back out, unless they set
+            ``keep_in_output``.
     """
 
-    def __init__(self, n_partitions: int) -> None:
+    def __init__(self, n_partitions: int, preprocessing: Any = None) -> None:
         if n_partitions < 1:
             raise ValueError(f"n_partitions must be >= 1, got {n_partitions}")
         self.n_partitions = n_partitions
+        self.preprocessing = build_preprocessors(preprocessing)
+
+    def _views(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Return ``(work, out)`` -- the grouping frame and the result frame.
+
+        ``work`` carries every preprocessing transform and is what the
+        subclass groups on; ``out`` carries only the transforms flagged
+        ``keep_in_output`` and is what the returned partitions are sliced
+        from.  Keeping them apart is the point of the whole mechanism: a
+        partitioner can group on a coarsened factor (say utilization ranked
+        low/medium/high) while every reported row still shows the raw value.
+
+        Both frames keep *df*'s row order, so a positional assignment
+        computed against ``work`` indexes ``out`` unchanged.  With no
+        preprocessing configured both are *df* itself.
+        """
+        work = out = df
+        for pre in self.preprocessing:
+            work = pre(work)
+            if pre.keep_in_output:
+                out = pre(out)
+        return work, out
 
     @abstractmethod
     def partition(self, df: pd.DataFrame) -> List[pd.DataFrame]:
@@ -73,6 +103,7 @@ class FedChipPartitioner(DatasetPartitioner):
             Smaller => more skew.  Default ``0.5``.
         random_state: Seed for the spillover RNG (and, in subclasses that
             need one, for the group-assignment step).
+        preprocessing: See :class:`DatasetPartitioner`.
     """
 
     def __init__(
@@ -81,8 +112,9 @@ class FedChipPartitioner(DatasetPartitioner):
         cluster_share: float = 0.8,
         dirichlet_alpha: float = 0.5,
         random_state: int = 42,
+        preprocessing: Any = None,
     ) -> None:
-        super().__init__(n_partitions)
+        super().__init__(n_partitions, preprocessing=preprocessing)
         if not 0.0 <= cluster_share <= 1.0:
             raise ValueError(
                 f"cluster_share must be in [0, 1], got {cluster_share}"
@@ -119,8 +151,9 @@ class FedChipPartitioner(DatasetPartitioner):
     def partition(self, df: pd.DataFrame) -> List[pd.DataFrame]:
         self._validate(df)
         df = df.copy().reset_index(drop=True)
+        work, out = self._views(df)
 
-        group_ids = self._assign_groups(df)
+        group_ids = self._assign_groups(work)
         K = self.n_partitions
         rng = np.random.default_rng(self.random_state)
         assignment = np.full(len(df), -1, dtype=int)
@@ -152,6 +185,6 @@ class FedChipPartitioner(DatasetPartitioner):
         if len(stray) > 0:
             assignment[stray] = rng.integers(0, K, size=len(stray))
 
-        return [df[assignment == i].reset_index(drop=True) for i in range(K)]
+        return [out[assignment == i].reset_index(drop=True) for i in range(K)]
 
 

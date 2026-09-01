@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,12 @@ class _ClusteringPartitioner(FedChipPartitioner):
 
     Preprocessing pipeline matches ``feature_axis_validation_N28.ipynb``:
 
-    1. One-hot encode categorical (non-numeric) columns via
+    0. Replace *ordered* categorical columns by their integer codes.  Only
+       a :mod:`partitioning.preprocessing` transform produces those, and it
+       produces them from a factor that was numeric to begin with, so the
+       codes keep it a single ordered dimension -- one-hot would both
+       discard the order and triple its pull on the Euclidean geometry.
+    1. One-hot encode the remaining categorical (non-numeric) columns via
        :func:`pd.get_dummies` (``dtype='uint8'``).
     2. Map every column to a Gaussian marginal with
        :class:`~sklearn.preprocessing.QuantileTransformer`
@@ -42,6 +47,10 @@ class _ClusteringPartitioner(FedChipPartitioner):
             skew. Default ``0.5``.
         random_state: Seed for PCA/K-means/QuantileTransformer and the
             Dirichlet RNG.
+        preprocessing: See
+            :class:`~partitioning.base.DatasetPartitioner`.  Transforms
+            shape the clustering matrix only; the returned rows keep their
+            raw values unless a transform sets ``keep_in_output``.
     """
 
     _IDENTIFIER_COLS = ("filename", "sample_id")
@@ -53,6 +62,7 @@ class _ClusteringPartitioner(FedChipPartitioner):
         cluster_share: float = 0.8,
         dirichlet_alpha: float = 0.5,
         random_state: int = 42,
+        preprocessing: Any = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -60,6 +70,7 @@ class _ClusteringPartitioner(FedChipPartitioner):
             cluster_share=cluster_share,
             dirichlet_alpha=dirichlet_alpha,
             random_state=random_state,
+            preprocessing=preprocessing,
         )
         self.features = list(features) if features is not None else None
         self.stratify_cols: List[str] = list(self.features or [])
@@ -84,7 +95,12 @@ class _ClusteringPartitioner(FedChipPartitioner):
         self.stratify_cols = list(cols)
         sub = df[cols].copy()
 
-        cat_cols = [c for c in cols if not pd.api.types.is_numeric_dtype(sub[c])]
+        for c in cols:
+            dtype = sub[c].dtype
+            if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
+                sub[c] = sub[c].cat.codes
+
+        cat_cols = [c for c in sub.columns if not pd.api.types.is_numeric_dtype(sub[c])]
         if cat_cols:
             sub = pd.get_dummies(sub, columns=cat_cols, dtype="uint8")
 

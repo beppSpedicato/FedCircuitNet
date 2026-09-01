@@ -5,6 +5,13 @@ from .clustering import KMeansClustering
 from .dirichlet import DirichletPartitioner
 from .feature_hierarchical import FeatureHierarchicalPartitioner
 from .iid import IIDPartitioner
+from .preprocessing import (
+    PREPROCESSOR_REGISTRY,
+    MetadataPreprocessor,
+    OrdinalRank,
+    UtilizationRank,
+    build_preprocessors,
+)
 
 PARTITIONER_REGISTRY: Dict[str, type] = {
     "iid": IIDPartitioner,
@@ -24,10 +31,15 @@ def _build_partitioner(part_cfg: Dict[str, Any]):
 
 __all__ = [
     "_build_partitioner",
+    "build_preprocessors",
     "DatasetPartitioner",
     "DirichletPartitioner",
     "FedChipPartitioner",
     "FeatureHierarchicalPartitioner",
     "IIDPartitioner",
     "KMeansClustering",
+    "MetadataPreprocessor",
+    "OrdinalRank",
+    "PREPROCESSOR_REGISTRY",
+    "UtilizationRank",
 ]

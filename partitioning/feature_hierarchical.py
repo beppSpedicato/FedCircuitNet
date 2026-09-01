@@ -1,5 +1,5 @@
 import warnings
-from typing import List, Sequence
+from typing import Any, List, Sequence
 
 import numpy as np
 import pandas as pd
@@ -36,9 +36,10 @@ class FeatureHierarchicalPartitioner(FedChipPartitioner):
     needs one partition, or when the feature list is exhausted.
 
     When a level has more distinct values than the remaining budget,
-    adjacent values (in ``sort=True`` order) are merged into contiguous
-    bins to hit the budget exactly.  This keeps neighbouring feature
-    values on the same client, which is the natural reading of
+    adjacent values (in ``sort=True`` order -- category order for an
+    ordered ``Categorical``, natural order otherwise) are merged into
+    contiguous bins to hit the budget exactly.  This keeps neighbouring
+    feature values on the same client, which is the natural reading of
     "hierarchical by importance".
 
     The leaves define one group per client; the FedChip ownership +
@@ -59,6 +60,13 @@ class FeatureHierarchicalPartitioner(FedChipPartitioner):
         dirichlet_alpha: Concentration of the Dirichlet redistributing the
             leftover ``1 - cluster_share``.  Default ``0.5``.
         random_state: Seed for the spillover RNG.
+        preprocessing: See
+            :class:`~partitioning.base.DatasetPartitioner`.  This is where
+            the utilization ranking of ``PARTITIONING_ANALYSIS.md`` §4.1
+            plugs in: ``rank_utilization`` collapses the five N28 levels to
+            low/medium/high so the split tree branches three ways instead
+            of five, while the clients handed back still report the raw
+            0.7-0.9 value.
     """
 
     def __init__(
@@ -68,6 +76,7 @@ class FeatureHierarchicalPartitioner(FedChipPartitioner):
         cluster_share: float = 0.8,
         dirichlet_alpha: float = 0.5,
         random_state: int = 42,
+        preprocessing: Any = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -75,6 +84,7 @@ class FeatureHierarchicalPartitioner(FedChipPartitioner):
             cluster_share=cluster_share,
             dirichlet_alpha=dirichlet_alpha,
             random_state=random_state,
+            preprocessing=preprocessing,
         )
         if not features:
             raise ValueError("features must contain at least one column name")
@@ -111,7 +121,11 @@ class FeatureHierarchicalPartitioner(FedChipPartitioner):
         feature = remaining_features[0]
         rest = remaining_features[1:]
 
-        groups = [g for _, g in sub.groupby(feature, sort=True)]
+        # observed=True matters once a preprocessing transform has made the
+        # column an ordered Categorical: deeper in the recursion a subset
+        # rarely covers every rank, and the default would hand back empty
+        # groups that then consume budget and produce empty leaves.
+        groups = [g for _, g in sub.groupby(feature, sort=True, observed=True)]
         m = len(groups)
 
         # Constant column at this level: it carries no information here,

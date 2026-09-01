@@ -78,7 +78,9 @@ def _track_partition_distribution(
     for col in stratify_cols:
         if col not in metadata_df.columns:
             continue
-        unique_vals = sorted(metadata_df[col].astype(str).unique().tolist())
+        unique_vals = sorted(
+            {v for part in partitions for v in part[col].astype(str).unique()}
+        )
         n_vals = len(unique_vals)
         if n_vals == 0:
             continue

@@ -44,6 +44,18 @@ data:
 # utilization dominate the feature-space separation.  At n_partitions: 6
 # the budget is already spent after design_name + clock, so `utilization`
 # only becomes active if n_partitions is raised.
+#
+# `preprocessing` reshapes the metadata the split tree is built on, and
+# nothing else: the partitions handed back still carry the raw column
+# values, so the Aim per-partition histograms and the notebook tables keep
+# reporting utilization at 0.7-0.9.  `rank_utilization` implements
+# PARTITIONING_ANALYSIS.md §4.1 -- (0.70, 0.75) low / (0.80) medium /
+# (0.85, 0.90) high -- collapsing 5 levels to 3 and the design x
+# utilization grid from 30 cells to 18, so the tree branches three ways on
+# describable personas instead of five near-duplicate neighbours.
+# Add `keep_in_output: true` to make the partitions report the rank
+# instead of the raw value; override `levels:` for a different ranking
+# (N14 stores utilization as whole percents, not a fraction).
 partitioning:
   type: feature_hierarchical
   n_partitions: 20
@@ -51,6 +63,14 @@ partitioning:
     - design_name
     - clock
     - utilization
+  preprocessing:
+    - type: rank_utilization
+      column: utilization
+      keep_in_output: false
+      levels:
+        low:    [0.70, 0.75]
+        medium: [0.80]
+        high:   [0.85, 0.90]
   cluster_share: 0.8
   dirichlet_alpha: 0.5
   random_state: 42

@@ -28,6 +28,18 @@ data:
 # cluster with K-means into `n_partitions` groups, then give each
 # client `cluster_share` (80%) of its own cluster plus a Dirichlet-
 # distributed spillover of the remaining 20%.
+#
+# Left un-preprocessed on purpose: this is the FedChip baseline the
+# feature-hierarchical scheme is measured against, so its input matrix
+# stays the raw metadata.  To rank utilization anyway (see
+# PARTITIONING_ANALYSIS.md §4.1), uncomment:
+#
+#   preprocessing:
+#     - type: rank_utilization
+#
+# The ranked column arrives as an *ordered* categorical, which
+# `_prepare_matrix` maps to integer codes rather than one-hot columns, so
+# utilization keeps the single-column weight it has here today.
 partitioning:
   type: kmeans
   n_partitions: 20

@@ -88,7 +88,7 @@ model:
 # ---------------------------------------------------------------------------
 strategy:
   type: fedavg
-  local_epochs: 100        # E
+  local_epochs: 20        # E
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
   round_clients: 10

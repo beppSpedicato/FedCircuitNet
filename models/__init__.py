@@ -3,9 +3,11 @@
 from typing import Any, Callable, Dict
 from torch import nn
 from .routenet import RouteNet
+from .routenet_groupnorm import RouteNetGroupNorm
 
 MODEL_REGISTRY: Dict[str, type] = {
     "RouteNet": RouteNet,
+    "RouteNetGroupNorm": RouteNetGroupNorm,
 }
 
 

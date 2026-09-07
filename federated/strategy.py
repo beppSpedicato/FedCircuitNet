@@ -23,14 +23,14 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
 from .base import Aggregator, FederatedClient, StateDict
-from .server import FederatedServer
+from .server import BYTES_PER_MB, FederatedServer
 from .statistics import RoundStats
 
 if TYPE_CHECKING:
@@ -53,6 +53,8 @@ class FederatedStrategy(ABC):
         device: Device on which local training and evaluation run.
         num_workers: ``DataLoader`` worker count for client loaders.
         shuffle: Whether client loaders shuffle each local epoch.
+        round_clients: Clients sampled per round (``m``).
+        seed: Seed for the server's client-selection RNG.
     """
 
     def __init__(
@@ -61,6 +63,8 @@ class FederatedStrategy(ABC):
         device: torch.device = torch.device("cpu"),
         num_workers: int = 0,
         shuffle: bool = True,
+        round_clients: Optional[int] = None,
+        seed: Optional[int] = None,
     ) -> None:
         if batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {batch_size}")
@@ -69,6 +73,8 @@ class FederatedStrategy(ABC):
         self.device = device
         self.num_workers = num_workers
         self.shuffle = shuffle
+        self.round_clients = round_clients
+        self.seed = seed
 
         self._server: Optional[FederatedServer] = None
 
@@ -151,6 +157,12 @@ class FederatedStrategy(ABC):
             clients=clients,
             aggregator=self._build_aggregator(),
             device=self.device,
+            round_clients=self.round_clients,
+            seed=self.seed,
+        )
+        self.round_clients = self._server.round_clients
+        print(
+            f"===> {self.round_clients}/{len(clients)} clients sampled per round"
         )
 
         eval_model: Optional[nn.Module] = None
@@ -196,3 +208,21 @@ class FederatedStrategy(ABC):
         if self._server is None:
             raise RuntimeError("Call train() before accessing global_state.")
         return self._server.global_state
+
+    @property
+    def selection_counts(self) -> List[int]:
+        if self._server is None:
+            raise RuntimeError("Call train() before accessing selection_counts.")
+        return list(self._server.selection_counts)
+
+    @property
+    def download_mb(self) -> List[float]:
+        if self._server is None:
+            raise RuntimeError("Call train() before accessing download_mb.")
+        return [b / BYTES_PER_MB for b in self._server.download_bytes]
+
+    @property
+    def upload_mb(self) -> List[float]:
+        if self._server is None:
+            raise RuntimeError("Call train() before accessing upload_mb.")
+        return [b / BYTES_PER_MB for b in self._server.upload_bytes]

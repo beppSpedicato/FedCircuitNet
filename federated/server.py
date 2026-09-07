@@ -12,15 +12,13 @@ from .statistics import ClientRoundStats, RoundStats
 
 DeviceLike = Union[str, torch.device, None]
 
+BYTES_PER_MB = 1024 * 1024
+
+def state_nbytes(state: StateDict) -> int:
+    return sum(t.numel() * t.element_size() for t in state.values())
+
 
 def _is_cuda_device(device: DeviceLike) -> bool:
-    """True iff *device* names a CUDA device.
-
-    The FL runtime picks the device from the Aim/Hydra config
-    (``runtime.cpu`` / ``runtime.gpu_id`` -> :func:`federated.device.resolve_device`)
-    and hands it to the strategy, which forwards it here.  This function
-    honours that choice instead of relying on ``torch.cuda.is_available()``.
-    """
     if device is None:
         return False
     if isinstance(device, torch.device):
@@ -31,18 +29,17 @@ def _is_cuda_device(device: DeviceLike) -> bool:
 class FederatedServer:
     """Round-based synchronous FL server.
 
-    Implements the ``ServerExecutes`` loop of the FedAvg pseudo-code:
-    each round sample ``m = max(C * K, 1)`` clients, ship the current
-    global state, collect their updates and merge them through the
-    configured :class:`Aggregator`.  Per-round timing and per-client
-    metrics are captured in a :class:`RoundStats` record.
-
-    Client updates within a round are dispatched to a persistent
-    :class:`ThreadPoolExecutor`; when CUDA is available each client is
-    bound to its own :class:`torch.cuda.Stream` so per-client GPU work
-    can overlap.  PyTorch tensor ops release the GIL and streams are
-    thread-local, so this parallelises the round without changing any
-    client-side logic.
+    Args:
+        model_fn: Zero-arg factory building a fresh, initialised model.
+        clients: The full client pool (``K``).
+        aggregator: Merges the round's updates into the new global state.
+        device: Device the clients train on.
+        round_clients: Clients sampled per round (``m``).  Values above
+            ``K`` are clamped to ``K``; ``None`` means full participation.
+        seed: Seed for the client-selection RNG.  A dedicated generator
+            is used so the participation sequence is reproducible no
+            matter how much of the global RNG local training consumes.
+        max_parallel_clients: Thread-pool width.
     """
 
     def __init__(
@@ -51,6 +48,8 @@ class FederatedServer:
         clients: Iterable[FederatedClient],
         aggregator: Aggregator,
         device: DeviceLike = None,
+        round_clients: Optional[int] = None,
+        seed: Optional[int] = None,
         max_parallel_clients: int = 5,
     ) -> None:
 
@@ -61,6 +60,28 @@ class FederatedServer:
 
         self.aggregator = aggregator
         self._round_counter = 0
+
+        n_clients = len(self.clients)
+        if round_clients is None:
+            self.round_clients = n_clients
+        elif round_clients < 1:
+            raise ValueError(f"round_clients must be >= 1, got {round_clients}")
+        else:
+            self.round_clients = min(int(round_clients), n_clients)
+            if self.round_clients != round_clients:
+                print(
+                    f"[server] round_clients={round_clients} exceeds the "
+                    f"{n_clients} available clients; clamped to {n_clients} "
+                    "(full participation)."
+                )
+
+        self._selection_rng = torch.Generator()
+        if seed is not None:
+            self._selection_rng.manual_seed(int(seed))
+
+        self.selection_counts: List[int] = [0] * n_clients
+        self.download_bytes: List[int] = [0] * n_clients
+        self.upload_bytes: List[int] = [0] * n_clients
 
         init_model = model_fn()
         self._global_state: StateDict = {
@@ -104,28 +125,46 @@ class FederatedServer:
         elapsed = time.perf_counter() - t0
         return idx, new_state, metrics, elapsed
 
+    def select_clients(self) -> List[int]:
+        perm = torch.randperm(len(self.clients), generator=self._selection_rng)
+        return sorted(int(i) for i in perm[: self.round_clients].tolist())
+
     def run_round(self) -> RoundStats:
         self._round_counter += 1
         round_start = time.perf_counter()
 
-        n = len(self.clients)
-        updates: List[Optional[Tuple[StateDict, int]]] = [None] * n
-        client_stats: List[Optional[ClientRoundStats]] = [None] * n
+        selected = self.select_clients()
+        for idx in selected:
+            self.selection_counts[idx] += 1
+
+        down_bytes = state_nbytes(self._global_state)
+
+        updates: List[Tuple[StateDict, int]] = []
+        client_stats: List[ClientRoundStats] = []
 
         futures = [
-            self._pool.submit(self._run_client, i, client)
-            for i, client in enumerate(self.clients)
+            self._pool.submit(self._run_client, idx, self.clients[idx])
+            for idx in selected
         ]
         for fut in futures:
             idx, new_state, metrics, elapsed = fut.result()
             client = self.clients[idx]
-            updates[idx] = (new_state, client.num_samples)
-            client_stats[idx] = ClientRoundStats(
-                client_id=client.client_id,
-                num_samples=client.num_samples,
-                train_loss=float(metrics.get("train_loss", float("nan"))),
-                num_local_steps=int(metrics.get("num_local_steps", 0)),
-                local_update_time_s=elapsed,
+            updates.append((new_state, client.num_samples))
+
+            up_bytes = state_nbytes(new_state)
+            self.download_bytes[idx] += down_bytes
+            self.upload_bytes[idx] += up_bytes
+
+            client_stats.append(
+                ClientRoundStats(
+                    client_id=client.client_id,
+                    num_samples=client.num_samples,
+                    train_loss=float(metrics.get("train_loss", float("nan"))),
+                    num_local_steps=int(metrics.get("num_local_steps", 0)),
+                    local_update_time_s=elapsed,
+                    download_mb=down_bytes / BYTES_PER_MB,
+                    upload_mb=up_bytes / BYTES_PER_MB,
+                )
             )
 
         agg_start = time.perf_counter()
@@ -134,7 +173,9 @@ class FederatedServer:
 
         return RoundStats(
             round_idx=self._round_counter,
-            selected_client_ids=[int(client.client_id) for client in self.clients],
+            selected_client_ids=[
+                int(self.clients[idx].client_id) for idx in selected
+            ],
             client_stats=client_stats,
             aggregation_time_s=agg_elapsed,
             round_time_s=time.perf_counter() - round_start,

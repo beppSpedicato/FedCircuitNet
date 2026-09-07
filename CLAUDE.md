@@ -150,8 +150,31 @@ Config pairs must agree: `training.save_path` (train) ==
   `_evaluate_global_model`, which then does `strategy_cfg['eval_metric']`. All
   shipped configs set `evaluation.metadata_csv: null`, so it never fires. Fix
   the call site before enabling per-round eval.
-- **No client sampling.** Every client trains every round; there is no
-  fraction-`C` selection despite the FedAvg pseudo-code in the docstrings.
+- **Client sampling is `strategy.round_clients` (default 10).**
+  `FederatedServer.select_clients` draws that many client indices per round via
+  `torch.randperm(K)[:round_clients]` on a **dedicated** generator seeded from
+  `runtime.seed` — sharing the global RNG would make the selection sequence
+  depend on how much of it local training consumed, and therefore on the
+  partitioning scheme. Values above `n_partitions` are clamped (with a printed
+  notice); set it equal to `n_partitions` for full participation.
+  `RoundStats.client_stats` and `selected_client_ids` cover **participants
+  only**, so per-round means are over `m`, not `K`. Participation is counted in
+  `server.selection_counts` (a `K`-long list, exposed as
+  `strategy.selection_counts`) and logged at the end of the run as the
+  `client_rounds` Aim histogram plus one `Client Rounds Participated` scalar
+  per client.
+- **Communication cost is measured server-side, not declared.**
+  `FederatedServer` sums `numel() * element_size()` over the state dict it
+  ships out (`download_bytes`) and the one it gets back (`upload_bytes`), per
+  client, so mixed dtypes are exact — RouteNet's state dict is 79 tensors,
+  float32 weights plus int64 `num_batches_tracked`, 0.4639 MB. Kept as two
+  numbers because they only coincide for strategies that send the whole model
+  both ways: FedBN would skip BN on the way up, SCAFFOLD adds control
+  variates. Surfaces as `ClientRoundStats.download_mb` / `upload_mb`,
+  `strategy.download_mb` / `upload_mb` (cumulative, MB, by client id), the
+  `download_cost` / `upload_cost` / `total_comm_cost` Aim histograms, and
+  `Round Comm Cost (MB)` per round. 1 MB = 2^20 bytes; framing overhead of a
+  real transport is not modelled.
 - **Configs hardcode absolute `/home/spedicato/...` feature/label paths** for the
   remote GPU box. Override `data.feature_dir` / `data.label_dir` when running elsewhere.
 - **`fedavg_test_iid.yaml` and `fedavg_test_kmeans.yaml` share

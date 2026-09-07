@@ -1,15 +1,3 @@
-"""FedAvg strategy (McMahan et al. 2017).
-
-The training pipeline itself lives in :class:`FederatedStrategy`; this
-module only supplies the two strategy-specific hooks:
-
-* :meth:`_build_client` -- constructs a :class:`FedAvgClient` that runs
-  plain local SGD for ``E`` epochs at learning rate ``eta``.
-* :meth:`_build_aggregator` -- returns a
-  :class:`WeightedAverageAggregator`, i.e. the ``sum_k (n_k / n) w_k``
-  merge from the paper.
-"""
-
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -37,6 +25,8 @@ class FedAvgStrategy(FederatedStrategy):
         device: Device for local training / evaluation.
         num_workers: ``DataLoader`` worker count for client loaders.
         shuffle: Whether client loaders shuffle each local epoch.
+        round_clients: Clients sampled per round (``m = C * K``).
+        seed: Seed for the client-selection RNG.
         aggregator: Optional override for the merge -- kept optional so
             ablations (e.g. unweighted mean, FedBN-style BN skipping) can
             be dropped in without subclassing.
@@ -51,6 +41,8 @@ class FedAvgStrategy(FederatedStrategy):
         device: str = "cpu",
         num_workers: int = 0,
         shuffle: bool = True,
+        round_clients: Optional[int] = None,
+        seed: Optional[int] = None,
         aggregator: Optional[Aggregator] = None,
     ) -> None:
         super().__init__(
@@ -58,6 +50,8 @@ class FedAvgStrategy(FederatedStrategy):
             device=device,
             num_workers=num_workers,
             shuffle=shuffle,
+            round_clients=round_clients,
+            seed=seed,
         )
         if local_epochs < 1:
             raise ValueError(f"local_epochs must be >= 1, got {local_epochs}")

@@ -63,6 +63,7 @@ strategy:
   local_epochs: 100        # E
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
+  round_clients: 10
   loss_type: BiasedMSELoss
   biased_loss_s: 5
   biased_loss_b: 0.1

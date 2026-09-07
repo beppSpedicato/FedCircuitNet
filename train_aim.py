@@ -99,6 +99,78 @@ def _track_partition_distribution(
                 step=0,
             )
 
+def _track_client_participation(
+    run: Run,
+    selection_counts: list,
+    num_rounds: int,
+) -> None:
+    n_clients = len(selection_counts)
+    if n_clients == 0:
+        return
+
+    run.track(
+        Distribution.from_histogram(selection_counts, (0, n_clients)),
+        name="client_rounds",
+        step=0,
+    )
+    for client_id, count in enumerate(selection_counts):
+        run.track(
+            value=int(count),
+            name="Client Rounds Participated",
+            context={"subset": "train", "client_id": int(client_id)},
+            step=0,
+        )
+
+    print(
+        f"===> Participation over {num_rounds} rounds (per client): "
+        f"min={min(selection_counts)} max={max(selection_counts)} "
+        f"mean={sum(selection_counts) / n_clients:.1f}"
+    )
+
+
+def _track_communication_cost(
+    run: Run,
+    download_mb: list,
+    upload_mb: list,
+) -> None:
+    n_clients = len(download_mb)
+    if n_clients == 0:
+        return
+
+    total_mb = [d + u for d, u in zip(download_mb, upload_mb)]
+    series = {
+        "download_cost": download_mb,
+        "upload_cost": upload_mb,
+        "total_comm_cost": total_mb,
+    }
+    for name, values in series.items():
+        run.track(
+            Distribution.from_histogram(values, (0, n_clients)),
+            name=name,
+            step=0,
+        )
+
+    scalars = {
+        "Client Total Download (MB)": download_mb,
+        "Client Total Upload (MB)": upload_mb,
+        "Client Total Comm (MB)": total_mb,
+    }
+    for name, values in scalars.items():
+        for client_id, value in enumerate(values):
+            run.track(
+                value=float(value),
+                name=name,
+                context={"subset": "train", "client_id": int(client_id)},
+                step=0,
+            )
+
+    print(
+        f"===> Comm cost: {sum(total_mb):.1f} MB total, "
+        f"{sum(total_mb) / n_clients:.1f} MB mean per client "
+        f"(min={min(total_mb):.1f} max={max(total_mb):.1f})"
+    )
+
+
 def _evaluate_global_model(
     model: nn.Module,
     loader: DataLoader,
@@ -145,26 +217,44 @@ def _build_round_callback(
     threshold: float,
     runtime_cfg: Dict[str, Any],
 ):
-    """Compose the on_round_end callback: Aim tracking + optional eval.
-
-    Periodic checkpointing lives in the strategy itself (``save_every`` /
-    ``save_dir``) -- keep it out of the callback.
-    """
 
     def on_round_end(stats: RoundStats, global_state: StateDict):
         for c in stats.client_stats:
+            client_ctx = {"subset": "train", "client_id": int(c.client_id)}
             run.track(
                 value=c.train_loss,
                 name="Client Train Loss",
-                context={"subset": "train", "client_id": int(c.client_id)},
+                context=client_ctx,
                 step=stats.round_idx,
             )
             run.track(
                 value=c.local_update_time_s,
                 name="Client Update Time (s)",
-                context={"subset": "train", "client_id": int(c.client_id)},
+                context=client_ctx,
                 step=stats.round_idx,
             )
+            run.track(
+                value=c.download_mb,
+                name="Client Download (MB)",
+                context=client_ctx,
+                step=stats.round_idx,
+            )
+            run.track(
+                value=c.upload_mb,
+                name="Client Upload (MB)",
+                context=client_ctx,
+                step=stats.round_idx,
+            )
+
+        round_comm_mb = sum(
+            c.download_mb + c.upload_mb for c in stats.client_stats
+        )
+        run.track(
+            round_comm_mb,
+            name="Round Comm Cost (MB)",
+            context={"subset": "train"},
+            step=stats.round_idx,
+        )
 
         losses = [c.train_loss for c in stats.client_stats]
         mean_loss = sum(losses) / len(losses) if losses else float("nan")
@@ -307,9 +397,20 @@ def train(CFG: omegaconf.DictConfig) -> None:
     torch.save({"state_dict": strategy.global_state}, final_ckpt)
     run.log_info(f"Final model saved to {final_ckpt}")
 
+    selection_counts = strategy.selection_counts
+    download_mb = strategy.download_mb
+    upload_mb = strategy.upload_mb
+    _track_client_participation(run, selection_counts, num_rounds)
+    _track_communication_cost(run, download_mb, upload_mb)
+
     run["summary"] = {
         "strategy": strategy_cfg["type"],
         "partition_sizes": list(partition_sizes),
+        "round_clients": strategy.round_clients,
+        "selection_counts": list(selection_counts),
+        "download_mb": [round(v, 4) for v in download_mb],
+        "upload_mb": [round(v, 4) for v in upload_mb],
+        "total_comm_mb": round(sum(download_mb) + sum(upload_mb), 4),
         "final_mean_train_loss": (
             float(np.mean([c.train_loss for c in stats.client_stats]))
         ),

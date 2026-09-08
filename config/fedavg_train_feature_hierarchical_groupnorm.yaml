@@ -1,0 +1,114 @@
+# RouteNetGroupNorm variant of fedavg_train_feature_hierarchical.yaml.
+#
+# Identical to that config in *every* field except `model.type` and
+# `training.save_path`, so the two runs form a controlled A/B on the
+# normalisation layer alone: same partitioning, same seed, same E / eta /
+# B / T, same loss.  Do not tune anything here without mirroring it in
+# fedavg_train_feature_hierarchical.yaml, otherwise the comparison stops
+# being a normalisation ablation.
+#
+# Why GroupNorm: RouteNet's conv blocks use BatchNorm, whose running
+# mean/var are estimated per client on that client's own local batches.
+# Under the feature-hierarchical split each client holds a distinct
+# design x clock x utilization slice, so those local statistics disagree
+# across clients and FedAvg averages incompatible BN buffers into the
+# global model.  GroupNorm normalises within each sample (2 groups per
+# conv output, hardcoded in models/routenet_groupnorm.py) and carries no
+# running buffers, which removes that failure mode -- this run measures
+# how much of the non-IID gap it actually recovers.
+#
+# NOTE: the model's state dict has no BN keys, so the checkpoint this
+# produces is NOT loadable by a `type: RouteNet` test config
+# (test_aim.py calls load_state_dict strictly).  Hence the separate
+# save_path below, paired with fedavg_test_feature_hierarchical_groupnorm.yaml.
+
+experiment: fedavg_drc_train
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/train_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Partitioning
+# ---------------------------------------------------------------------------
+# Copied verbatim from fedavg_train_feature_hierarchical.yaml -- see that
+# file for the full rationale on feature ordering, cluster_share spillover
+# and the rank_utilization preprocessing step.  Kept byte-identical (same
+# random_state) so both runs see exactly the same 20 client partitions.
+partitioning:
+  type: feature_hierarchical
+  n_partitions: 20
+  features:
+    - design_name
+    - clock
+    - utilization
+  preprocessing:
+    - type: rank_utilization
+      column: utilization
+      keep_in_output: false
+      levels:
+        low:    [0.70, 0.75]
+        medium: [0.80]
+        high:   [0.85, 0.90]
+  cluster_share: 0.8
+  dirichlet_alpha: 0.5
+  random_state: 42
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+# The only substantive difference from the RouteNet baseline config.
+# Selects RouteNetGroupNorm from MODEL_REGISTRY (models/__init__.py).
+# The number of groups is fixed at 2 inside the model and is not
+# exposed as a config field.
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# ---------------------------------------------------------------------------
+# Strategy
+# ---------------------------------------------------------------------------
+strategy:
+  type: fedavg
+  local_epochs: 20         # E -- step cap, not epochs (see CLAUDE.md)
+  learning_rate: 2e-4      # eta
+  batch_size: 8            # B
+  round_clients: 10
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
+
+# ---------------------------------------------------------------------------
+# Runtime (shared across all strategies)
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+  seed: 42
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Training loop
+# ---------------------------------------------------------------------------
+training:
+  num_rounds: 100          # T -- communication rounds
+  save_path: ./work_dirs/fedavg_feature_hierarchical_groupnorm
+  save_freq_rounds: 10     # 0 disables periodic checkpoints
+
+# ---------------------------------------------------------------------------
+# Optional held-out evaluation during training
+# ---------------------------------------------------------------------------
+evaluation:
+  metadata_csv: null       # e.g. ./metadata/n28_val.csv
+  batch_size: 4
+  freq_rounds: 5
+  threshold: 0.1

@@ -1,0 +1,62 @@
+# Test companion to fedavg_train_feature_hierarchical_groupnorm.yaml.
+#
+# Evaluates the RouteNetGroupNorm global checkpoint centrally over the
+# whole held-out N28 DRC test set, using the same metrics and ROC / PR-AUC
+# sweep as every other test config (utils/metrics.py).
+#
+# `model.type` MUST stay RouteNetGroupNorm: test_aim.py builds the model
+# from this block and then calls load_state_dict without strict=False, so
+# pointing a `type: RouteNet` config at this checkpoint fails on the
+# missing/unexpected norm-layer keys rather than silently mis-loading.
+#
+# Compare the resulting PR-AUC against ./work_dirs/fedavg_feature_hierarchical
+# (the BatchNorm RouteNet run on the identical partitioning).  Report
+# PR-AUC alongside ROC-AUC -- the DRC labels are heavily imbalanced and
+# ROC-AUC alone overstates performance.
+
+experiment: fedavg_drc_test
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/test_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# Only the `type` field is meaningful here (used to tag the Aim run).
+strategy:
+  type: fedavg
+
+checkpoint: ./work_dirs/fedavg_feature_hierarchical_groupnorm/global_model_final.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  eval_metric:
+    - NRMS
+    - SSIM
+  threshold: 0.1           # DRC label binarisation for ROC / PR-AUC
+  plot_roc: true           # dump per-sample predictions + run ROC/PR sweep
+  # Must match training.save_path above: predictions land in
+  # `${save_path}/test_result/`, the sweep in `${save_path}/roc_prc.csv`
+  # and the summary in `${save_path}/test_metrics.json`.
+  save_path: ./work_dirs/fedavg_feature_hierarchical_groupnorm

@@ -28,4 +28,4 @@ def _build_model_fn(model_cfg: Dict[str, Any]) -> Callable[[], nn.Module]:
 
     return _make
 
-__all__ = ['RouteNet', '_build_model_fn']
+__all__ = ['RouteNet', 'RouteNetGroupNorm', '_build_model_fn']

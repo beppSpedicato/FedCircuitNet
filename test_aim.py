@@ -35,6 +35,8 @@ from aim import Run
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from models.routenet_groupnorm import RouteNetGroupNorm
+
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
@@ -46,6 +48,7 @@ from utils import build_metric, roc_prc, multi_process_score, set_random_seed  #
 
 MODEL_REGISTRY: Dict[str, type] = {
     "RouteNet": RouteNet,
+    "RouteNetGroupNorm": RouteNetGroupNorm
 }
 
 

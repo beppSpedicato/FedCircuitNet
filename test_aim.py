@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import hydra
+from utils.metrics import build_roc_prc_metric
 import numpy as np
 import omegaconf
 import pandas as pd
@@ -109,11 +110,6 @@ def test(CFG: omegaconf.DictConfig) -> None:
 
     print("===> Loading metadata")
     metadata_df = pd.read_csv(data_cfg["metadata_csv"])
-    """ if "filename" not in metadata_df.columns:
-        raise SystemExit(
-            "data.metadata_csv must contain a 'filename' column; "
-            f"got {list(metadata_df.columns)}"
-        ) """
     print(f"     {len(metadata_df)} test samples loaded from {data_cfg['metadata_csv']}")
 
     # Reference test.py forces batch_size=1 + shuffle=False and returns the
@@ -179,64 +175,41 @@ def test(CFG: omegaconf.DictConfig) -> None:
         run.track(avg, name=f"Avg {metric_name}", context={"subset": "test"})
 
     if plot_roc:
-        # Multi-threshold ROC / PR-AUC sweep -- identical to the reference
-        # build_roc_prc_metric plumbing, but with the label directory taken
-        # straight from the config (we don't ship an ann_file).
-        print("===> Running ROC / PR-AUC sweep (multi_process_score)")
-        multi_process_score(
-            out_name="roc_prc.csv",
-            threshold=threshold,
-            label_path=data_cfg["label_dir"],
-            save_path=save_path,
-        )
-        (
-            roc_auc,
-            prc_numerator,
-            tpr_list,
-            fpr_list,
-            precision_mean,
-            accuracy_mean,
-            tp,
-            tn,
-            fp,
-            fn,
-        ) = roc_prc(save_path)
+        roc_metric, prc_numerator = build_roc_prc_metric(**CFG)
+        csv_file = osp.join(CFG['save_path'], 'roc_prc.csv')
+        df = pd.read_csv(csv_file, header=None, names=["threshold", "id", "tn", "fp", "fn", "tp"])
+        t = df
+        no_negatives      = (t["fp"] == 0) & (t["tn"] == 0)
+        no_positives      = (t["tp"] == 0) & (t["fn"] == 0)
+        no_pred_positives = (t["tp"] == 0) & (t["fp"] == 0)
+        df = t[~(no_negatives | no_positives | no_pred_positives)]
+        df["pos"] = df["tp"] + df["fn"]
+        df["neg"] = df["fp"] + df["tn"]
+        valid = df[(df["pos"] > 0) & (df["neg"] > 0)].copy()
+        valid["tpr"] = valid["tp"] / valid["pos"]
+        valid["fpr"] = valid["fp"] / valid["neg"]
+        macro = valid.groupby("threshold")[["fpr", "tpr"]].mean()
+        df_filtered = valid[valid["threshold"] == 0.1].copy()
+        accuracy = (df_filtered['tp'].sum() + df_filtered['tn'].sum()) / (df_filtered['tp'].sum() + df_filtered['tn'].sum() + df_filtered['fp'].sum() + df_filtered['fn'].sum())
+        precision = df_filtered['tp'].sum() / (df_filtered['tp'].sum() + df_filtered['fp'].sum())
 
-        print(f"===> AUC of ROC. {roc_auc:.4f}")
-        print(f"===> PRC numerator: {prc_numerator:.4f}")
-        print(f"===> TPR mean: {sum(tpr_list)/len(tpr_list):.4f}")
-        print(f"===> FPR mean: {sum(fpr_list)/len(fpr_list):.4f}")
-        print(f"===> Precision: {precision_mean:.4f}")
-        print(f"===> Accuracy: {accuracy_mean:.4f}")
-        print(f"===> TP: {tp}, TN: {tn}, FP: {fp}, FN: {fn}")
+        print("\n===> AUC of ROC. {:.4f}".format(roc_metric))
+        print("===> Precision: {:.4f}".format(precision))
+        print(f"===> Accuracy @ score>={CFG['threshold']}: {accuracy:.4f}")
+        print("===> PRC numerator: {:.4f}".format(prc_numerator))
 
-        summary.update(
-            {
-                "roc_auc": float(roc_auc),
-                "prc_numerator": float(prc_numerator),
-                "precision_mean": float(precision_mean),
-                "accuracy_mean": float(accuracy_mean),
-                "tp": int(tp),
-                "tn": int(tn),
-                "fp": int(fp),
-                "fn": int(fn),
-            }
-        )
+        run.track(accuracy, name='Test Accuracy', context={'subset': 'test'})
+        run.track(precision, name='Test Precision', context={'subset': 'test'})
+        run.track(df_filtered['tp'].sum(), name='Confusion TP', context={'subset': 'test'})
+        run.track(df_filtered['tn'].sum(), name='Confusion TN', context={'subset': 'test'})
+        run.track(df_filtered['fp'].sum(), name='Confusion FP', context={'subset': 'test'})
+        run.track(df_filtered['fn'].sum(), name='Confusion FN', context={'subset': 'test'})
 
-        run.track(accuracy_mean, name="Test Accuracy", context={"subset": "test"})
-        run.track(precision_mean, name="Test Precision", context={"subset": "test"})
-        run.track(float(roc_auc), name="Test ROC AUC", context={"subset": "test"})
-        run.track(float(prc_numerator), name="Test PR AUC", context={"subset": "test"})
-        run.track(int(tp), name="Confusion TP", context={"subset": "test"})
-        run.track(int(tn), name="Confusion TN", context={"subset": "test"})
-        run.track(int(fp), name="Confusion FP", context={"subset": "test"})
-        run.track(int(fn), name="Confusion FN", context={"subset": "test"})
-
-        for i in range(len(tpr_list)):
-            run.track(tpr_list[i], name="ROC_TPR", step=i, context={"type": "curve"})
-        for i in range(len(fpr_list)):
-            run.track(fpr_list[i], name="ROC_FPR", step=i, context={"type": "curve"})
-
+        for i in range(len(macro['tpr'])):
+            run.track(macro['tpr'].iloc[i], name='ROC_TPR', step=i, context={'type': 'curve'})
+        for i in range(len(macro['fpr'])):
+            run.track(macro['fpr'].iloc[i], name='ROC_FPR', step=i, context={'type': 'curve'})
+        
     run["summary"] = summary
 
     metrics_path = osp.join(save_path, "test_metrics.json")

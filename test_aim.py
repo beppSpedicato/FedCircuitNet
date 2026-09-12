@@ -175,8 +175,9 @@ def test(CFG: omegaconf.DictConfig) -> None:
         run.track(avg, name=f"Avg {metric_name}", context={"subset": "test"})
 
     if plot_roc:
-        roc_metric, prc_numerator = build_roc_prc_metric(**CFG)
-        csv_file = osp.join(CFG['save_path'], 'roc_prc.csv')
+        parent_dir = data_cfg["feature_dir"].rstrip("/").rsplit("/", 1)[0]
+        roc_metric, prc_numerator = build_roc_prc_metric(threshold=threshold, dataroot=parent_dir, ann_file=data_cfg["ann_file"], save_path=save_path)
+        csv_file = osp.join(save_path, 'roc_prc.csv')
         df = pd.read_csv(csv_file, header=None, names=["threshold", "id", "tn", "fp", "fn", "tp"])
         t = df
         no_negatives      = (t["fp"] == 0) & (t["tn"] == 0)

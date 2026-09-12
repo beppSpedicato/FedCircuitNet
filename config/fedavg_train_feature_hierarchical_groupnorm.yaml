@@ -78,7 +78,7 @@ strategy:
   local_epochs: 20         # E -- step cap, not epochs (see CLAUDE.md)
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
-  round_clients: 10
+  round_clients: 20
   loss_type: BiasedMSELoss
   biased_loss_s: 5
   biased_loss_b: 0.1
@@ -100,7 +100,7 @@ runtime:
 # Training loop
 # ---------------------------------------------------------------------------
 training:
-  num_rounds: 100          # T -- communication rounds
+  num_rounds: 500          # T -- communication rounds
   save_path: ./work_dirs/fedavg_feature_hierarchical_groupnorm
   save_freq_rounds: 10     # 0 disables periodic checkpoints
 

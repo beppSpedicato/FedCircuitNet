@@ -13,6 +13,7 @@ data:
   metadata_csv: ./files/test_N28.csv
   feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
   label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+  ann_file: ./files/ann_test_N28.csv
 
 # ---------------------------------------------------------------------------
 # Model + checkpoint
@@ -25,14 +26,14 @@ model:
 strategy:
   type: fedavg
 
-checkpoint: ./work_dirs/fedavg_kmeans/global_model_final.pth
+checkpoint: ./work_dirs/fedavg_kmeans/model_round_0500.pth
 
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false
-  gpu: 0
+  gpu: 1
   num_workers: 0
   seed: 42
 

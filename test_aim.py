@@ -196,7 +196,7 @@ def test(CFG: omegaconf.DictConfig) -> None:
 
         print("\n===> AUC of ROC. {:.4f}".format(roc_metric))
         print("===> Precision: {:.4f}".format(precision))
-        print(f"===> Accuracy @ score>={CFG['threshold']}: {accuracy:.4f}")
+        print(f"===> Accuracy @ score>={threshold}: {accuracy:.4f}")
         print("===> PRC numerator: {:.4f}".format(prc_numerator))
 
         run.track(accuracy, name='Test Accuracy', context={'subset': 'test'})

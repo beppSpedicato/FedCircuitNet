@@ -95,7 +95,7 @@ class FederatedStrategy(ABC):
 
     def train(
         self,
-        partitioner: "DatasetPartitioner",
+        partitions: List[pd.DataFrame],
         metadata_df: "pd.DataFrame",
         model_fn: ModelFn,
         dataset_fn: DatasetFn,
@@ -109,7 +109,7 @@ class FederatedStrategy(ABC):
         """Run the full FL training pipeline.
 
         Args:
-            partitioner: Splits ``metadata_df`` into per-client subsets.
+            partitions: List of DataFrames, each containing the data for a single client.
             metadata_df: DataFrame with at least a ``filename`` column.
             model_fn: Zero-arg factory building a fresh, initialised model.
             dataset_fn: Turns a partition DataFrame into a torch ``Dataset``.
@@ -135,7 +135,6 @@ class FederatedStrategy(ABC):
         if save_dir is not None:
             os.makedirs(save_dir, exist_ok=True)
 
-        partitions = partitioner.partition(metadata_df)
         loaders = [
             DataLoader(
                 dataset_fn(part),

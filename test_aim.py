@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import hydra
+from models import load_model
 from utils.metrics import build_roc_prc_metric
 import numpy as np
 import omegaconf
@@ -36,49 +37,13 @@ from aim import Run
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from models.routenet_groupnorm import RouteNetGroupNorm
-
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
 from utils.device import features_to_device, resolve_device  # noqa: E402
-from models.routenet import RouteNet  # noqa: E402
-from utils import build_metric, roc_prc, multi_process_score, set_random_seed  # noqa: E402
+from utils import build_metric, set_random_seed  # noqa: E402
 
-
-MODEL_REGISTRY: Dict[str, type] = {
-    "RouteNet": RouteNet,
-    "RouteNetGroupNorm": RouteNetGroupNorm
-}
-
-
-def _load_model(
-    model_cfg: Dict[str, Any],
-    checkpoint: str,
-    device: torch.device,
-) -> torch.nn.Module:
-    mtype = model_cfg["type"]
-    if mtype not in MODEL_REGISTRY:
-        raise ValueError(
-            f"Unknown model.type={mtype!r}; known: {list(MODEL_REGISTRY)}"
-        )
-    cls = MODEL_REGISTRY[mtype]
-    model = cls(
-        in_channels=int(model_cfg["in_channels"]),
-        out_channels=int(model_cfg["out_channels"]),
-    )
-
-    ckpt = torch.load(checkpoint, map_location="cpu")
-    state = (
-        ckpt["state_dict"]
-        if isinstance(ckpt, dict) and "state_dict" in ckpt
-        else ckpt
-    )
-    model.load_state_dict(state)
-    model.to(device)
-    model.eval()
-    return model
 
 
 @hydra.main(version_base=None, config_path="./config", config_name="fedavg_test")
@@ -112,8 +77,6 @@ def test(CFG: omegaconf.DictConfig) -> None:
     metadata_df = pd.read_csv(data_cfg["metadata_csv"])
     print(f"     {len(metadata_df)} test samples loaded from {data_cfg['metadata_csv']}")
 
-    # Reference test.py forces batch_size=1 + shuffle=False and returns the
-    # label path per sample; mirror that here.
     dataset = DRCDataset(
         metadata_df,
         feature_dir=data_cfg["feature_dir"],
@@ -128,8 +91,9 @@ def test(CFG: omegaconf.DictConfig) -> None:
     )
 
     print(f"===> Loading checkpoint {checkpoint}")
-    model = _load_model(model_cfg, checkpoint, device)
-
+    model = load_model(model_cfg, checkpoint, device)
+    model.eval()
+    
     metrics = {name: build_metric(name) for name in metric_names}
     avg_metrics: Dict[str, float] = {name: 0.0 for name in metric_names}
 

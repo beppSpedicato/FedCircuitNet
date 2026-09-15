@@ -167,6 +167,7 @@ class FederatedStrategy(ABC):
         eval_model: Optional[nn.Module] = None
         if global_eval_fn is not None and global_eval_loader is not None:
             eval_model = model_fn().to(self.device)
+            eval_model.eval()
 
         for _ in range(num_rounds):
             stats = self._server.run_round()

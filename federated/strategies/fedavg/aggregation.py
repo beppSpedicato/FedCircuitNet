@@ -30,9 +30,9 @@ class WeightedAverageAggregator(Aggregator):
                 aggregated[key] = first_tensor.clone()
                 continue
 
-            acc = torch.zeros(first_tensor.shape, dtype=torch.float64)
+            acc = torch.zeros(first_tensor.shape, dtype=torch.float64,  device="cpu")
             for state, n_k in client_updates:
-                acc.add_(state[key].to(torch.float64), alpha=n_k / total)
+                acc.add_(state[key].to(device="cpu", dtype=torch.float64), alpha=n_k / total)
             aggregated[key] = acc.to(first_tensor.dtype)
 
         return aggregated

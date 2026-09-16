@@ -26,7 +26,7 @@ model:
 strategy:
   type: fedavg
 
-checkpoint: ./work_dirs/fedavg_feature_hierarchical/model_round_0500.pth
+checkpoint: ./work_dirs/fedavg_feature_hierarchical/model_round_0200.pth
 
 # ---------------------------------------------------------------------------
 # Runtime

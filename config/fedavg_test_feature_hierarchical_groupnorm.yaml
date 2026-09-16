@@ -37,7 +37,7 @@ model:
 strategy:
   type: fedavg
 
-checkpoint: ./work_dirs/fedavg_feature_hierarchical_groupnorm/model_round_0500.pth
+checkpoint: ./work_dirs/fedavg_feature_hierarchical_groupnorm/model_round_0200.pth
 
 # ---------------------------------------------------------------------------
 # Runtime

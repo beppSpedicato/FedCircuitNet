@@ -1,0 +1,99 @@
+# Example configuration for train_aim.py.
+#
+# Config layout mirrors the code layout:
+#   - the `strategy` block's `type` selects an entry in
+#     federated.strategies.STRATEGY_REGISTRY (each key maps to
+#     federated/strategies/<id>/).  Remaining fields under `strategy` are
+#     forwarded to that strategy's factory.
+#   - `partitioning.type` selects a class from PARTITIONER_REGISTRY in
+#     partitioning/__init__.py (iid, kmeans, dirichlet,
+#     feature_hierarchical).
+#   - `model.type` selects a class from MODEL_REGISTRY in train_aim.py.
+
+experiment: fedavg_drc_train
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/train_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Partitioning
+# ---------------------------------------------------------------------------
+# NIID-Bench-style Dirichlet partition.  A composite categorical label is
+# built by concatenating the values of the listed metadata columns
+# ("feat1|feat2|..."), and for every distinct composite level a fresh
+# Dirichlet(alpha) is drawn over the K clients.  Smaller alpha -> stronger
+# per-level skew; larger alpha -> distribution flattens toward uniform.
+#
+# Left un-preprocessed on purpose: this is the NIID-Bench baseline the
+# feature-hierarchical scheme is measured against, and ranking utilization
+# here would cut the composite label from 6x3x5 = 90 levels to 54, which
+# changes the baseline rather than the scheme under test.  To rank it
+# anyway (see PARTITIONING_ANALYSIS.md §4.1), uncomment:
+#
+#   preprocessing:
+#     - type: rank_utilization
+partitioning:
+  type: dirichlet
+  n_partitions: 20
+  features:
+    - design_name
+    - clock
+    - utilization
+  alpha: 0.5
+  random_state: 42
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# ---------------------------------------------------------------------------
+# Strategy
+# ---------------------------------------------------------------------------
+strategy:
+  type: fedavg
+  local_epochs: 20        # E
+  learning_rate: 2e-4      # eta
+  batch_size: 8            # B
+  round_clients: 10
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
+
+# ---------------------------------------------------------------------------
+# Runtime (shared across all strategies)
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 1
+  num_workers: 0
+  seed: 42
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Training loop
+# ---------------------------------------------------------------------------
+training:
+  num_rounds: 200          # T -- communication rounds
+  save_path: ./work_dirs/fedavg_dirichlet_gn
+  save_freq_rounds: 10     # 0 disables periodic checkpoints
+
+# ---------------------------------------------------------------------------
+# Optional held-out evaluation during training
+# ---------------------------------------------------------------------------
+evaluation:
+  metadata_csv: null       # e.g. ./metadata/n28_val.csv
+  batch_size: 4
+  freq_rounds: 5
+  threshold: 0.1

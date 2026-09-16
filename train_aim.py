@@ -99,7 +99,7 @@ def train(CFG: omegaconf.DictConfig) -> None:
     save_every = int(training_cfg.get("save_freq_rounds", 0) or 0)
     print(f"===> Running {num_rounds} rounds (save_every={save_every})")
     partition_sizes, stats = strategy.train(
-        partitioner=partitioner,
+        partitions=partitions,
         metadata_df=metadata_df,
         model_fn=_build_model_fn(model_cfg),
         dataset_fn=_build_dataset_fn(data_cfg),

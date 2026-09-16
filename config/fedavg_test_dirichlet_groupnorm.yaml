@@ -19,14 +19,14 @@ data:
 # Model + checkpoint
 # ---------------------------------------------------------------------------
 model:
-  type: RouteNet
+  type: RouteNetGroupNorm
   in_channels: 9
   out_channels: 1
 
 strategy:
   type: fedavg
 
-checkpoint: ./work_dirs/fedavg_dirichlet/model_round_0200.pth
+checkpoint: ./work_dirs/fedavg_dirichlet_gn/model_round_0200.pth
 
 # ---------------------------------------------------------------------------
 # Runtime
@@ -46,5 +46,5 @@ evaluation:
     - SSIM
   threshold: 0.1
   plot_roc: true
-  save_path: ./work_dirs/fedavg_dirichlet
+  save_path: ./work_dirs/fedavg_dirichlet_gn
 

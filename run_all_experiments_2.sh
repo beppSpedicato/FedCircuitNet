@@ -27,7 +27,7 @@
 set -e
 
 CONFIG_PREFIX='fedavg'
-BASELINE_CONFIGS=('iid' 'kmeans' 'dirichlet')
+BASELINE_CONFIGS=('feature_hierarchical')
 GROUPNORM_CONFIGS=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

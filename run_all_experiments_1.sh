@@ -27,7 +27,7 @@
 set -e
 
 CONFIG_PREFIX='fedavg'
-BASELINE_CONFIGS=('feature_hierarchical')
+BASELINE_CONFIGS=('iid' 'dirichlet' 'kmeans' 'feature_hierarchical')
 GROUPNORM_CONFIGS=('kmeans_groupnorm' 'feature_hierarchical_groupnorm')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,7 +69,7 @@ for ID in "${CONFIGS[@]}"; do
     echo "=========================================================="
 
     echo "--> Training Config ${LABEL} (${TRAIN_CFG})"
-    python train_aim.py --config-name="${TRAIN_CFG}"
+    # python train_aim.py --config-name="${TRAIN_CFG}"
 
     sleep 2
 

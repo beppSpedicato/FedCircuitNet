@@ -1,0 +1,47 @@
+# Augmented-metrics companion to fedavg_train_iid_groupnorm.yaml.
+#
+# Evaluates the same global checkpoint as fedavg_test_iid_groupnorm.yaml over the
+# held-out N28 DRC test set with drc_augmented_metrics.py (NRMS,
+# NRMS_nonzero, MAE, MAE_nonzero), mirroring the reference
+# drc_augmented_metrics_*.yaml from code_examples/CircuitNet/drc_prediction.
+
+experiment: fedavg_drc_augmented_metrics
+tag: iid_groupnorm
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/test_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# Only the `type` field is meaningful here (used to tag the Aim run).
+strategy:
+  type: fedavg
+
+checkpoint: ./work_dirs/fedavg_iid_gn/model_round_0200.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  label_scale: 200  # generate_training_set.py clips DRC counts to 200 and divides by 200
+  # Per-sample metrics land in `${save_path}/augmented_metrics.csv`.
+  save_path: ./work_dirs/fedavg_iid_gn

@@ -1,13 +1,14 @@
 #!/bin/bash
 
-# Sequentially runs train_aim.py + test_aim.py for each Hydra config pair
-# under ./config/, mirroring
+# Sequentially runs train_aim.py + test_aim.py + drc_augmented_metrics.py
+# for each Hydra config triple under ./config/, mirroring
 # code_examples/CircuitNet/drc_prediction/run_all_experiments.sh.
 #
 # Each entry is treated as an experiment suffix and resolves to the
-# config pair:
+# config triple:
 #     ./config/${CONFIG_PREFIX}_train_${ID}.yaml
 #     ./config/${CONFIG_PREFIX}_test_${ID}.yaml
+#     ./config/${CONFIG_PREFIX}_augmented_metrics_${ID}.yaml
 #
 # Two lists, kept separate because they vary along different axes:
 #   BASELINE_CONFIGS  -- partitioning scheme, model fixed at RouteNet
@@ -43,7 +44,7 @@ fi
 # Fail before burning a single GPU-hour if any pair is missing or misnamed.
 MISSING=0
 for ID in "${CONFIGS[@]}"; do
-    for PHASE in train test; do
+    for PHASE in train test augmented_metrics; do
         CFG="./config/${CONFIG_PREFIX}_${PHASE}_${ID}.yaml"
         if [ ! -f "${CFG}" ]; then
             echo "ERROR: missing config ${CFG}" >&2
@@ -62,6 +63,7 @@ echo "Logs will be recorded by Aim."
 for ID in "${CONFIGS[@]}"; do
     TRAIN_CFG="${CONFIG_PREFIX}_train_${ID}"
     TEST_CFG="${CONFIG_PREFIX}_test_${ID}"
+    METRICS_CFG="${CONFIG_PREFIX}_augmented_metrics_${ID}"
     LABEL="${ID}"
 
     echo "=========================================================="
@@ -75,6 +77,9 @@ for ID in "${CONFIGS[@]}"; do
 
     echo "--> Testing Config ${LABEL} (${TEST_CFG})"
     python test_aim.py --config-name="${TEST_CFG}"
+
+    echo "--> Augmented metrics Config ${LABEL} (${METRICS_CFG})"
+    python drc_augmented_metrics.py --config-name="${METRICS_CFG}"
 
     echo "Configuration ${LABEL} completed successfully."
     echo ""

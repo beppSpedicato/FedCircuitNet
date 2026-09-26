@@ -45,7 +45,7 @@ from datasets.drc_dataset import DRCDataset  # noqa: E402
 from models import load_model  # noqa: E402
 from utils.device import resolve_device  # noqa: E402
 
-METRICS = ['NRMS', 'NRMS_nonzero', 'MAE', 'MAE_nonzero']
+METRICS = ['NRMS', 'NRMS_design_with_violations', 'NRMS_nonzero', 'MAE', 'MAE_design_with_violations', 'MAE_nonzero']
 
 
 def drc_metrics(label, pred, label_scale):
@@ -58,9 +58,11 @@ def drc_metrics(label, pred, label_scale):
 
     nan = float('nan')
     return {
-        'NRMS': float(np.sqrt(np.mean(err ** 2)) / label_range) if has_violations else nan,
+        'NRMS': float(np.sqrt(np.mean(err ** 2)) / label_range),
+        'NRMS_design_with_violations': float(np.sqrt(np.mean(err ** 2)) / label_range) if has_violations else nan,
         'NRMS_nonzero': float(np.sqrt(np.mean(err[nonzero] ** 2)) / label_range) if has_violations else nan,
         'MAE': float(np.mean(np.abs(err)) * label_scale),
+        'MAE_design_with_violations': float(np.mean(np.abs(err)) * label_scale) if has_violations else nan,
         'MAE_nonzero': float(np.mean(np.abs(err[nonzero])) * label_scale) if has_violations else nan,
     }
 

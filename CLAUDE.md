@@ -185,6 +185,12 @@ Config pairs must agree: `training.save_path` (train) ==
   stay comparable to the centralised RouteNet baseline (ROC-AUC 0.95 / PR-AUC 0.63).
   Do not "improve" them; changes must be mirrored in both places.
 - `build_metric(name)` lowercases and looks up a module global, so config
-  `NRMS` / `SSIM` map to `nrms` / `ssim`. Available: `nrms`, `ssim`, `psnr`, `emd`.
+  `NRMS` / `SSIM` map to `nrms` / `ssim`. Available: `nrms`, `ssim`, `psnr`, `emd`,
+  plus the DRC set used by `drc_augmented_metrics.py`: `nrms_design_with_violations`,
+  `nrms_nonzero`, `mae`, `mae_design_with_violations`, `mae_nonzero`. All go
+  through `input_converter`, so maps are clamped to [0, 1] and quantized to uint8
+  before comparison. The `*_design_with_violations` / `*_nonzero` variants
+  return NaN when the label has no violation, and the `mae*` variants take a
+  `label_scale` kwarg (1 = normalized units; pass 200 to get violations/cell).
 - **Always report PR-AUC alongside ROC-AUC** — the DRC labels are heavily
   imbalanced and ROC-AUC alone overstates performance.

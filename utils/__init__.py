@@ -7,7 +7,9 @@ centralised RouteNet baseline.
 
 Public API:
     - :func:`build_metric`  -- name -> callable ``(target, pred) -> float``
-        with the reference set ``nrms``, ``ssim``, ``psnr``, ``emd``.
+        with the reference set ``nrms``, ``ssim``, ``psnr``, ``emd`` plus
+        the DRC set ``nrms_design_with_violations``, ``nrms_nonzero``,
+        ``mae``, ``mae_design_with_violations``, ``mae_nonzero``.
     - :func:`build_loss`    -- name -> loss module (``MSELoss``,
         ``L1Loss``, ``BiasedMSELoss``).
     - :func:`multi_process_score` / :func:`roc_prc` -- multi-threshold

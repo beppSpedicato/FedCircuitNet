@@ -1,31 +1,10 @@
-"""Additional test-set metrics for DRC violation prediction.
-
-Port of ``code_examples/CircuitNet/drc_prediction/drc_augmented_metrics.py``:
-the metrics and their Aim / CSV output are identical.  Only the config
-plumbing (nested Hydra layout, as in test_aim.py) and the sample-loader
-source (a metadata DataFrame instead of an ann_file CSV) differ.
-
-For each test sample the trained model predicts a DRC map and four metrics are
-computed against the label:
-
-- NRMS:         RMSE over all cells / (label.max() - label.min()).
-- NRMS_nonzero: RMSE over the cells with label > 0 only, same normalization as
-                NRMS so the two are directly comparable.
-- MAE:          mean |pred - label| over all cells, in DRC violations per cell.
-                generate_training_set.py clips the DRC counts to 200 and
-                divides by 200, so pred and label are multiplied by label_scale.
-- MAE_nonzero:  as MAE, restricted to the cells with label > 0.
-
-NRMS, NRMS_nonzero and MAE_nonzero are undefined on samples whose label has no
-violation: those samples are excluded from the averages and counted instead.
-Unlike the NRMS of test_aim.py, maps are not quantized to uint8 before computing it.
-"""
 
 from __future__ import annotations
 
 import os
 import os.path as osp
 import sys
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict
 
@@ -43,28 +22,12 @@ sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
 from models import load_model  # noqa: E402
-from utils.device import resolve_device  # noqa: E402
+from utils import build_metric  # noqa: E402
+from utils.device import features_to_device, resolve_device  # noqa: E402
 
 METRICS = ['NRMS', 'NRMS_design_with_violations', 'NRMS_nonzero', 'MAE', 'MAE_design_with_violations', 'MAE_nonzero']
-
-
-def drc_metrics(label, pred, label_scale):
-    label = label.astype(np.float64).ravel()
-    pred = pred.astype(np.float64).ravel()
-    err = pred - label
-    nonzero = label > 0
-    label_range = label.max() - label.min()
-    has_violations = label_range > 0 and nonzero.any()
-
-    nan = float('nan')
-    return {
-        'NRMS': float(np.sqrt(np.mean(err ** 2)) / label_range),
-        'NRMS_design_with_violations': float(np.sqrt(np.mean(err ** 2)) / label_range) if has_violations else nan,
-        'NRMS_nonzero': float(np.sqrt(np.mean(err[nonzero] ** 2)) / label_range) if has_violations else nan,
-        'MAE': float(np.mean(np.abs(err)) * label_scale),
-        'MAE_design_with_violations': float(np.mean(np.abs(err)) * label_scale) if has_violations else nan,
-        'MAE_nonzero': float(np.mean(np.abs(err[nonzero])) * label_scale) if has_violations else nan,
-    }
+# Reported in DRC violations per cell instead of normalized label units.
+SCALED_METRICS = ['MAE', 'MAE_design_with_violations', 'MAE_nonzero']
 
 
 @hydra.main(version_base=None, config_path="./config", config_name="fedavg_augmented_metrics_iid")
@@ -105,26 +68,40 @@ def evaluate(CFG: omegaconf.DictConfig) -> None:
     model = load_model(model_cfg, resolved["checkpoint"], device)
     model.eval()
 
+    metrics = {name: build_metric(name) for name in METRICS}
+    for name in SCALED_METRICS:
+        metrics[name] = partial(metrics[name], label_scale=label_scale)
+    avg_metrics: Dict[str, float] = {name: 0.0 for name in METRICS}
+    n_defined: Dict[str, int] = {name: 0 for name in METRICS}
+
+    print(f"===> Iterating {len(dataset)} samples")
     rows = []
     with torch.no_grad():
-        for feature, label, label_path in tqdm(loader):
-            feature = feature.to(device)
-            prediction = model(feature).cpu().numpy()
-            label = label.numpy()
+        with tqdm(total=len(loader), desc="test") as bar:
+            for feature, label, label_path in loader:
+                feature, label = features_to_device(feature, label, runtime_cfg)
 
-            values = drc_metrics(label, prediction, label_scale)
-            for name, value in values.items():
-                if not np.isnan(value):
-                    run.track(
-                        value=value,
-                        name=f"Test {name} (dist)",
-                        context={'subset': 'test', 'aggregation': 'distribution'},
-                    )
-            rows.append({
-                'sample': osp.splitext(osp.basename(label_path[0]))[0],
-                'violating_cells': int((label > 0).sum()),
-                **values,
-            })
+                prediction = model(feature)
+
+                row = {
+                    'sample': osp.splitext(osp.basename(label_path[0]))[0],
+                    'violating_cells': int((label > 0).sum()),
+                }
+                for metric_name, metric_fn in metrics.items():
+                    metric_v = float(metric_fn(label.cpu(), prediction.squeeze(1).cpu()))
+                    row[metric_name] = metric_v
+                    # NaN = undefined on this sample: kept in the CSV, left out of the average
+                    if not np.isnan(metric_v):
+                        avg_metrics[metric_name] += metric_v
+                        n_defined[metric_name] += 1
+                        run.track(
+                            value=metric_v,
+                            name=f"Test {metric_name} (dist)",
+                            context={'subset': 'test', 'aggregation': 'distribution'},
+                        )
+                rows.append(row)
+
+                bar.update(1)
 
     df = pd.DataFrame(rows)
     os.makedirs(save_path, exist_ok=True)
@@ -132,15 +109,16 @@ def evaluate(CFG: omegaconf.DictConfig) -> None:
     df.to_csv(csv_path, index=False)
     print(f"===> Per-sample metrics saved to {csv_path}")
 
-    n_with_violations = int(df['NRMS'].notna().sum())
+    n_with_violations = int((df['violating_cells'] > 0).sum())
     print(f"===> Samples with at least one violation: {n_with_violations}/{len(df)}")
     run.track(len(df), name='Test samples', context={'subset': 'test'})
     run.track(n_with_violations, name='Test samples with violations', context={'subset': 'test'})
 
-    for name in METRICS:
-        avg = float(df[name].mean())  # NaN (undefined) samples are skipped
-        print("===> Avg. {}: {:.4f} (over {} samples)".format(name, avg, df[name].notna().sum()))
-        run.track(avg, name=f"Test Avg {name}", context={'subset': 'test'})
+    for metric_name, total in avg_metrics.items():
+        n = n_defined[metric_name]
+        avg = total / n if n else float("nan")
+        print(f"===> Avg. {metric_name}: {avg:.4f} (over {n} samples)")
+        run.track(avg, name=f"Test Avg {metric_name}", context={'subset': 'test'})
 
 
 if __name__ == "__main__":

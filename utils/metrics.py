@@ -13,16 +13,18 @@ import uuid
 import psutil
 import time
 import csv
-from sklearn.metrics import accuracy_score, roc_curve, confusion_matrix
+from sklearn.metrics import accuracy_score, roc_curve, confusion_matrix, mean_absolute_error
 from scipy.interpolate import make_interp_spline
 from functools import partial
 
 from scipy.stats import wasserstein_distance
-from skimage.metrics import normalized_root_mse
+from skimage.metrics import normalized_root_mse, mean_squared_error
 import math
 import utils.metrics as metrics
 
-__all__ = ['psnr', 'ssim', 'nrms', 'emd']
+__all__ = ['psnr', 'ssim', 'nrms', 'emd',
+           'nrms_design_with_violations', 'nrms_nonzero',
+           'mae', 'mae_design_with_violations', 'mae_nonzero']
 
 def mkdir_or_exist(dir_name, mode=0o777):
     if dir_name == '':
@@ -46,7 +48,7 @@ def input_converter(apply_to=None):
                     else:
                         new_args.append(args[i])
 
-            return old_func(*new_args)
+            return old_func(*new_args, **kwargs)
         return new_func
 
     return input_converter_wrapper
@@ -119,6 +121,85 @@ def nrms(img1, img2, crop_border=0):
     if math.isinf(nrmse_value):
         return 0.05
     return nrmse_value
+
+
+# DRC variants: img1 is the label. The *_design_with_violations / *_nonzero ones
+# return NaN when the label has no violation. mae* map the uint8 images back to
+# label units (/ 255), then multiply by label_scale (200 -> DRC violations/cell).
+@input_converter(apply_to=('img1', 'img2'))
+def nrms_design_with_violations(img1, img2, crop_border=0):
+    assert img1.shape == img2.shape, (
+        f'Image shapes are different: {img1.shape}, {img2.shape}.')
+
+    if crop_border != 0:
+        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, None]
+        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, None]
+
+    if not img1.any():
+        return float('nan')
+    return normalized_root_mse(img1.flatten(), img2.flatten(), normalization='min-max')
+
+
+@input_converter(apply_to=('img1', 'img2'))
+def nrms_nonzero(img1, img2, crop_border=0):
+    assert img1.shape == img2.shape, (
+        f'Image shapes are different: {img1.shape}, {img2.shape}.')
+
+    if crop_border != 0:
+        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, None]
+        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, None]
+
+    if not img1.any():
+        return float('nan')
+    nonzero = img1 > 0
+    return normalized_root_mse(img1[nonzero].flatten(), img2[nonzero].flatten(), normalization='min-max')
+
+
+
+# sklearn keeps the uint8 dtype, so the maps are cast to float first:
+# pred - label would otherwise wrap around.
+@input_converter(apply_to=('img1', 'img2'))
+def mae(img1, img2, crop_border=0, label_scale=1.):
+    assert img1.shape == img2.shape, (
+        f'Image shapes are different: {img1.shape}, {img2.shape}.')
+
+    if crop_border != 0:
+        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, None]
+        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, None]
+
+    mae_value = mean_absolute_error(img1.flatten().astype(np.float64), img2.flatten().astype(np.float64))
+    return mae_value / 255. * label_scale
+
+
+@input_converter(apply_to=('img1', 'img2'))
+def mae_design_with_violations(img1, img2, crop_border=0, label_scale=1.):
+    assert img1.shape == img2.shape, (
+        f'Image shapes are different: {img1.shape}, {img2.shape}.')
+
+    if crop_border != 0:
+        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, None]
+        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, None]
+
+    if not img1.any():
+        return float('nan')
+    mae_value = mean_absolute_error(img1.flatten().astype(np.float64), img2.flatten().astype(np.float64))
+    return mae_value / 255. * label_scale
+
+
+@input_converter(apply_to=('img1', 'img2'))
+def mae_nonzero(img1, img2, crop_border=0, label_scale=1.):
+    assert img1.shape == img2.shape, (
+        f'Image shapes are different: {img1.shape}, {img2.shape}.')
+
+    if crop_border != 0:
+        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, None]
+        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, None]
+
+    if not img1.any():
+        return float('nan')
+    nonzero = img1 > 0
+    mae_value = mean_absolute_error(img1[nonzero].astype(np.float64), img2[nonzero].astype(np.float64))
+    return mae_value / 255. * label_scale
 
 
 

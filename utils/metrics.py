@@ -137,6 +137,7 @@ def nrms_design_with_violations(img1, img2, crop_border=0):
 
     if not img1.any():
         return float('nan')
+    
     return normalized_root_mse(img1.flatten(), img2.flatten(), normalization='min-max')
 
 
@@ -152,7 +153,8 @@ def nrms_nonzero(img1, img2, crop_border=0):
     if not img1.any():
         return float('nan')
     nonzero = img1 > 0
-    return normalized_root_mse(img1[nonzero].flatten(), img2[nonzero].flatten(), normalization='min-max')
+    rmse_value = np.sqrt(mean_squared_error(img1[nonzero], img2[nonzero]))
+    return rmse_value / (float(img1.max()) - float(img1.min()))
 
 
 

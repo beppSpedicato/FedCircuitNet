@@ -1,0 +1,53 @@
+# Test companion to fedavg_train_dirichlet_groupnorm_c100.yaml (client-count sweep, K = 100).
+#
+# Same evaluation as config/fedavg_test_dirichlet_groupnorm.yaml -- central
+# pass over the whole held-out N28 test set plus the ROC / PR-AUC sweep --
+# pointed at this sweep point's checkpoint.  `model.type` must stay
+# RouteNetGroupNorm (strict load_state_dict).  Report PR-AUC alongside
+# ROC-AUC.
+
+experiment: fedavg_drc_test_sweep_clients
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/test_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+  ann_file: ./files/ann_test_N28.csv
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# Only the `type` field is meaningful here (used to tag the Aim run).
+strategy:
+  type: fedavg
+
+checkpoint: ./work_dirs/sweep_clients/fedavg_dirichlet_groupnorm_c100/model_round_0200.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 1
+  num_workers: 0
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  eval_metric:
+    - NRMS
+    - SSIM
+  threshold: 0.1           # DRC label binarisation for ROC / PR-AUC
+  plot_roc: true           # dump per-sample predictions + run ROC/PR sweep
+  # Must match training.save_path in fedavg_train_dirichlet_groupnorm_c100.yaml.
+  save_path: ./work_dirs/sweep_clients/fedavg_dirichlet_groupnorm_c100

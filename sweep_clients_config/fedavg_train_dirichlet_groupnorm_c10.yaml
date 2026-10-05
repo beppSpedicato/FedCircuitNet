@@ -1,0 +1,85 @@
+# Client-count sweep -- dirichlet partitioning, RouteNetGroupNorm, K = 10.
+#
+# Identical to config/fedavg_train_dirichlet_groupnorm.yaml in every field
+# except partitioning.n_partitions (K = 10), strategy.round_clients
+# (m = ceil(K / 2) = 5, 50 % participation), `experiment` and
+# training.save_path.  That config (K = 20, m = 10) is the K = 20 point of
+# this sweep and is not repeated here.
+#
+# Paired with fedavg_test_dirichlet_groupnorm_c10.yaml and
+# fedavg_augmented_metrics_dirichlet_groupnorm_c10.yaml; run all three via
+# run_sweep_clients_exp.sh.
+
+experiment: fedavg_drc_train_sweep_clients
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/train_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Partitioning
+# ---------------------------------------------------------------------------
+partitioning:
+  type: dirichlet
+  n_partitions: 10
+  features:
+    - design_name
+    - clock
+    - utilization
+  alpha: 0.5
+  random_state: 42
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# ---------------------------------------------------------------------------
+# Strategy
+# ---------------------------------------------------------------------------
+strategy:
+  type: fedavg
+  local_epochs: 20         # E -- step cap; a client with < E*B = 160 samples stops after one pass
+  learning_rate: 2e-4      # eta
+  batch_size: 8            # B
+  round_clients: 5         # m = ceil(K / 2)
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
+
+# ---------------------------------------------------------------------------
+# Runtime (shared across all strategies)
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 1
+  num_workers: 0
+  seed: 42
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Training loop
+# ---------------------------------------------------------------------------
+training:
+  num_rounds: 200          # T -- communication rounds
+  save_path: ./work_dirs/sweep_clients/fedavg_dirichlet_groupnorm_c10
+  save_freq_rounds: 10     # 0 disables periodic checkpoints
+
+# ---------------------------------------------------------------------------
+# Optional held-out evaluation during training
+# ---------------------------------------------------------------------------
+evaluation:
+  metadata_csv: null       # e.g. ./metadata/n28_val.csv
+  batch_size: 4
+  freq_rounds: 5
+  threshold: 0.1

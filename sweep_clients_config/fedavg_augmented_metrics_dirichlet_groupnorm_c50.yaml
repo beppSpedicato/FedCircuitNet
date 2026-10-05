@@ -35,7 +35,7 @@ checkpoint: ./work_dirs/sweep_clients/fedavg_dirichlet_groupnorm_c50/model_round
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false
-  gpu: 1
+  gpu: 0
   num_workers: 0
 
 # ---------------------------------------------------------------------------

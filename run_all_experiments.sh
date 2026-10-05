@@ -28,8 +28,8 @@
 set -e
 
 CONFIG_PREFIX='fedavg'
-BASELINE_CONFIGS=('iid' 'dirichlet' 'kmeans' 'feature_hierarchical')
-GROUPNORM_CONFIGS=('kmeans_groupnorm' 'feature_hierarchical_groupnorm')
+BASELINE_CONFIGS=()
+GROUPNORM_CONFIGS=('iid_groupnorm' 'dirichlet_groupnorm')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
@@ -76,7 +76,7 @@ for ID in "${CONFIGS[@]}"; do
     sleep 2
 
     echo "--> Testing Config ${LABEL} (${TEST_CFG})"
-    python test_aim.py --config-name="${TEST_CFG}"
+    # python test_aim.py --config-name="${TEST_CFG}"
 
     echo "--> Augmented metrics Config ${LABEL} (${METRICS_CFG})"
     python drc_augmented_metrics.py --config-name="${METRICS_CFG}"

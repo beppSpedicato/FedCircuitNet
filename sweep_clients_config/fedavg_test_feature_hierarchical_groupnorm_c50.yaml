@@ -7,6 +7,7 @@
 # ROC-AUC.
 
 experiment: fedavg_drc_test_sweep_clients
+tag: feature_hierarchical_groupnorm_c50
 
 # ---------------------------------------------------------------------------
 # Data

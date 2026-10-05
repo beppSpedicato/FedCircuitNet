@@ -17,6 +17,7 @@
 # not as 50 feature-defined teams.
 
 experiment: fedavg_drc_train_sweep_clients
+tag: feature_hierarchical_groupnorm_c50
 
 # ---------------------------------------------------------------------------
 # Data

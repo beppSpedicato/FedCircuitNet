@@ -11,6 +11,7 @@
 # run_sweep_clients_exp.sh.
 
 experiment: fedavg_drc_train_sweep_clients
+tag: kmeans_groupnorm_c100
 
 # ---------------------------------------------------------------------------
 # Data

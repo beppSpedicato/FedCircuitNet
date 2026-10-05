@@ -2,9 +2,10 @@
 #
 # Identical to config/fedavg_train_feature_hierarchical_groupnorm.yaml in every field
 # except partitioning.n_partitions (K = 10), strategy.round_clients
-# (m = ceil(K / 2) = 5, 50 % participation), `experiment` and
-# training.save_path.  That config (K = 20, m = 10) is the K = 20 point of
-# this sweep and is not repeated here.
+# (m = ceil(K / 2) = 5, 50 % participation), strategy.local_epochs
+# (E = 40, see Strategy), `experiment`, `tag` and training.save_path.
+# That config (K = 20, m = 10, E = 20) is the K = 20 point of this sweep
+# and is not repeated here.
 #
 # Paired with fedavg_test_feature_hierarchical_groupnorm_c10.yaml and
 # fedavg_augmented_metrics_feature_hierarchical_groupnorm_c10.yaml; run all three via
@@ -56,7 +57,12 @@ model:
 # ---------------------------------------------------------------------------
 strategy:
   type: fedavg
-  local_epochs: 20         # E -- step cap; a client with < E*B = 160 samples stops after one pass
+  # Fixed local-step budget T * E * m = 40,000, the same as the K = 20
+  # configs (200 * 20 * 10): T and m are held, only E moves, so fewer and
+  # larger silos train longer per round.  E = 40000 / (200 * m) = 40.
+  # Effective budget here is ~39,400 steps in expectation: 1 of the
+  # 10 clients hold < E*B samples and stop after one pass.
+  local_epochs: 40         # E -- step cap; a client with < E*B = 320 samples stops after one pass
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
   round_clients: 5         # m = ceil(K / 2)

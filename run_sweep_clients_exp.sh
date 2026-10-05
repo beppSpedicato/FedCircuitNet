@@ -11,10 +11,13 @@
 #     ./sweep_clients_config/${CONFIG_PREFIX}_augmented_metrics_${ID}.yaml
 #
 # The sweep is SCHEMES x CLIENTS with the model fixed at RouteNetGroupNorm
-# and participation fixed at 50 % (round_clients = ceil(K / 2)); every other
-# field matches config/fedavg_train_${SCHEME}_groupnorm.yaml.  K = 20 is not
-# in the list: those existing runs (round_clients = 10) are already the
-# K = 20 point of the sweep.
+# and participation fixed at 50 % (round_clients = ceil(K / 2)).  The total
+# local-step budget num_rounds * local_epochs * round_clients is held at
+# 40,000 by scaling local_epochs alone (E = 67 / 40 / 8 / 4 for K = 5 / 10 /
+# 50 / 100); every other field matches
+# config/fedavg_train_${SCHEME}_groupnorm.yaml.  K = 20 is not in the list:
+# those existing runs (round_clients = 10, local_epochs = 20, 40,000 steps)
+# are already the K = 20 point of the sweep.
 #
 # The entry scripts default to config_path=./config, so the sweep folder is
 # handed to Hydra with --config-path.

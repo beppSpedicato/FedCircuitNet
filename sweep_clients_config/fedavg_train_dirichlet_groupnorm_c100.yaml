@@ -2,9 +2,10 @@
 #
 # Identical to config/fedavg_train_dirichlet_groupnorm.yaml in every field
 # except partitioning.n_partitions (K = 100), strategy.round_clients
-# (m = ceil(K / 2) = 50, 50 % participation), `experiment` and
-# training.save_path.  That config (K = 20, m = 10) is the K = 20 point of
-# this sweep and is not repeated here.
+# (m = ceil(K / 2) = 50, 50 % participation), strategy.local_epochs
+# (E = 4, see Strategy), `experiment`, `tag` and training.save_path.
+# That config (K = 20, m = 10, E = 20) is the K = 20 point of this sweep
+# and is not repeated here.
 #
 # Paired with fedavg_test_dirichlet_groupnorm_c100.yaml and
 # fedavg_augmented_metrics_dirichlet_groupnorm_c100.yaml; run all three via
@@ -47,7 +48,10 @@ model:
 # ---------------------------------------------------------------------------
 strategy:
   type: fedavg
-  local_epochs: 20         # E -- step cap; a client with < E*B = 160 samples stops after one pass
+  # Fixed local-step budget T * E * m = 40,000, the same as the K = 20
+  # configs (200 * 20 * 10): T and m are held, only E moves, so fewer and
+  # larger silos train longer per round.  E = 40000 / (200 * m) = 4.
+  local_epochs: 4          # E -- step cap; a client with < E*B = 32 samples stops after one pass
   learning_rate: 2e-4      # eta
   batch_size: 8            # B
   round_clients: 50        # m = ceil(K / 2)

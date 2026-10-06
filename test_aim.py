@@ -52,6 +52,8 @@ def test(CFG: omegaconf.DictConfig) -> None:
 
     run = Run(experiment=resolved.get("experiment", "fedavg_test"))
     run["hparams"] = resolved
+    if resolved.get('tag'):
+        run.add_tag(resolved['tag'])
 
     data_cfg = resolved["data"]
     model_cfg = resolved["model"]

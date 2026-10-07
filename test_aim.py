@@ -15,6 +15,11 @@ Aim ``Run`` receives:
       ``evaluation.plot_roc`` is set -- ROC-AUC, PR-AUC (via the
       multi-threshold CSV sweep), TP/TN/FP/FN, accuracy and per-i
       ROC_TPR / ROC_FPR curve points.
+    - when ``strategy.loss_type`` is set (the training loss config,
+      mirrored into the test config so the exact same loss is computed),
+      a per-sample ``Test Loss (dist)`` scalar plus an aggregate
+      ``Avg Loss``, comparable against training's ``Mean Client Train
+      Loss`` -- see ``show_loss.ipynb``.
 """
 
 from __future__ import annotations
@@ -42,7 +47,7 @@ sys.path.insert(0, str(_HERE))
 
 from datasets.drc_dataset import DRCDataset  # noqa: E402
 from utils.device import features_to_device, resolve_device  # noqa: E402
-from utils import build_metric, set_random_seed  # noqa: E402
+from utils import build_loss, build_metric, set_random_seed  # noqa: E402
 
 
 
@@ -59,7 +64,8 @@ def test(CFG: omegaconf.DictConfig) -> None:
     model_cfg = resolved["model"]
     runtime_cfg = resolved.get("runtime", {})
     evaluation_cfg = resolved.get("evaluation") or {}
-    strategy_tag = (resolved.get("strategy") or {}).get("type")
+    strategy_cfg = resolved.get("strategy") or {}
+    strategy_tag = strategy_cfg.get("type")
     checkpoint = resolved["checkpoint"]
 
     device = resolve_device(runtime_cfg)
@@ -99,6 +105,12 @@ def test(CFG: omegaconf.DictConfig) -> None:
     metrics = {name: build_metric(name) for name in metric_names}
     avg_metrics: Dict[str, float] = {name: 0.0 for name in metric_names}
 
+    # build_loss() pops "loss_type" off the dict it's given, so hand it a
+    # copy -- strategy_cfg is also embedded in run["hparams"] above.
+    loss_type = strategy_cfg.get("loss_type")
+    loss_fn = build_loss(dict(strategy_cfg)) if loss_type else None
+    avg_loss = 0.0
+
     print(f"===> Iterating {len(dataset)} samples")
     with torch.no_grad():
         with tqdm(total=len(loader), desc="test") as bar:
@@ -106,6 +118,15 @@ def test(CFG: omegaconf.DictConfig) -> None:
                 feature, label = features_to_device(feature, label, runtime_cfg)
 
                 prediction = model(feature)
+
+                if loss_fn is not None:
+                    loss_v = float(loss_fn(prediction, label).item())
+                    avg_loss += loss_v
+                    run.track(
+                        value=loss_v,
+                        name="Test Loss (dist)",
+                        context={"subset": "test", "aggregation": "distribution"},
+                    )
 
                 for metric_name, metric_fn in metrics.items():
                     metric_v = metric_fn(label.cpu(), prediction.squeeze(1).cpu())
@@ -139,6 +160,13 @@ def test(CFG: omegaconf.DictConfig) -> None:
         print(f"===> Avg. {metric_name}: {avg:.4f}")
         summary[f"avg_{metric_name.lower()}"] = avg
         run.track(avg, name=f"Avg {metric_name}", context={"subset": "test"})
+
+    if loss_fn is not None:
+        avg_loss_value = avg_loss / len(dataset) if len(dataset) else float("nan")
+        print(f"===> Avg. Loss ({loss_type}): {avg_loss_value:.4f}")
+        summary["loss_type"] = loss_type
+        summary["avg_loss"] = avg_loss_value
+        run.track(avg_loss_value, name="Avg Loss", context={"subset": "test"})
 
     if plot_roc:
         parent_dir = data_cfg["feature_dir"].rstrip("/").rsplit("/", 1)[0]

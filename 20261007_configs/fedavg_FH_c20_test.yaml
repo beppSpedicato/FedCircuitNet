@@ -1,0 +1,59 @@
+# Test companion to fedavg_FH_c20_train.yaml (20261007 runs).
+#
+# Same evaluation as config/fedavg_test_feature_hierarchical_groupnorm.yaml -- central
+# pass over the whole held-out N28 test set plus the ROC / PR-AUC sweep --
+# pointed at this run's final checkpoint.  `model.type` must stay
+# RouteNetGroupNorm (strict load_state_dict).  Report PR-AUC alongside
+# ROC-AUC.
+
+experiment: fedavg_drc_test_20261007
+tag: FH_c20
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/test_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+  ann_file: ./files/ann_test_N28.csv
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# `type` tags the Aim run; loss_type/biased_loss_* mirror the paired
+# train config so test_aim.py computes the exact same loss for the
+# train-vs-test loss comparison in show_loss.ipynb.
+strategy:
+  type: fedavg
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+
+checkpoint: ./work_dirs/20261007/fedavg_FH_c20/model_round_0200.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  eval_metric:
+    - NRMS
+    - SSIM
+  threshold: 0.1           # DRC label binarisation for ROC / PR-AUC
+  plot_roc: true           # dump per-sample predictions + run ROC/PR sweep
+  # Must match training.save_path in fedavg_FH_c20_train.yaml.
+  save_path: ./work_dirs/20261007/fedavg_FH_c20

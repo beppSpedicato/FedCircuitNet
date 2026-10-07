@@ -1,0 +1,46 @@
+# Augmented-metrics companion to fedavg_iid_c10_train.yaml (20261007 runs).
+#
+# Evaluates the same checkpoint as fedavg_iid_c10_test.yaml with
+# drc_augmented_metrics.py, exactly as
+# config/fedavg_augmented_metrics_iid_groupnorm.yaml does for the base run.
+
+experiment: fedavg_drc_augmented_metrics_20261007
+tag: iid_c10
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/test_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Model + checkpoint
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# Only the `type` field is meaningful here (used to tag the Aim run).
+strategy:
+  type: fedavg
+
+checkpoint: ./work_dirs/20261007/fedavg_iid_c10/model_round_0200.pth
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+evaluation:
+  label_scale: 200  # generate_training_set.py clips DRC counts to 200 and divides by 200
+  # Per-sample metrics land in `${save_path}/augmented_metrics.csv`.
+  save_path: ./work_dirs/20261007/fedavg_iid_c10

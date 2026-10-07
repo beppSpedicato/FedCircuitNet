@@ -1,0 +1,82 @@
+# 20261007 runs -- iid partitioning, RouteNetGroupNorm, K = 10, full participation.
+#
+# Identical to config/fedavg_train_iid_groupnorm.yaml in every field
+# except partitioning.n_partitions (K = 10), strategy.round_clients
+# (m = K = 10: every client trains every round), `experiment`, `tag` and
+# training.save_path.  E / eta / B / T keep the base values, so the local-step
+# budget T * E * m = 200 * 20 * 10 = 40,000 grows with K (the client sweep in
+# sweep_clients_config/ held it at 40,000 instead).  Every client holds
+# >= E*B = 160 samples on train_N28.csv, so none stops before the step cap.
+#
+# Paired with fedavg_iid_c10_test.yaml and fedavg_iid_c10_aug.yaml; run all
+# three via run_all_experiments.sh.
+
+experiment: fedavg_drc_train_20261007
+tag: iid_c10
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  metadata_csv: ./files/train_N28.csv
+  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
+  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+
+# ---------------------------------------------------------------------------
+# Partitioning
+# ---------------------------------------------------------------------------
+partitioning:
+  type: iid
+  n_partitions: 10
+  seed: 42
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  type: RouteNetGroupNorm
+  in_channels: 9
+  out_channels: 1
+
+# ---------------------------------------------------------------------------
+# Strategy
+# ---------------------------------------------------------------------------
+strategy:
+  type: fedavg
+  local_epochs: 20         # E -- step cap, not epochs (see CLAUDE.md)
+  learning_rate: 2e-4      # eta
+  batch_size: 8            # B
+  round_clients: 10        # m = K, full participation
+  loss_type: BiasedMSELoss
+  biased_loss_s: 5
+  biased_loss_b: 0.1
+  eval_metric:
+    - NRMS
+    - SSIM
+
+# ---------------------------------------------------------------------------
+# Runtime (shared across all strategies)
+# ---------------------------------------------------------------------------
+runtime:
+  cpu: false
+  gpu: 0
+  num_workers: 0
+  seed: 42
+  shuffle: true
+
+# ---------------------------------------------------------------------------
+# Training loop
+# ---------------------------------------------------------------------------
+training:
+  num_rounds: 200          # T -- communication rounds
+  save_path: ./work_dirs/20261007/fedavg_iid_c10
+  save_freq_rounds: 100     # 0 disables periodic checkpoints
+
+# ---------------------------------------------------------------------------
+# Optional held-out evaluation during training
+# ---------------------------------------------------------------------------
+evaluation:
+  metadata_csv: null       # e.g. ./metadata/n28_val.csv
+  batch_size: 4
+  freq_rounds: 5
+  threshold: 0.1

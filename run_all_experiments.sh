@@ -1,53 +1,62 @@
 #!/bin/bash
 
 # Sequentially runs train_aim.py + test_aim.py + drc_augmented_metrics.py
-# for each Hydra config triple under ./config/, mirroring
-# code_examples/CircuitNet/drc_prediction/run_all_experiments.sh.
+# for each Hydra config triple under ./20261007_configs/, mirroring
+# run_sweep_clients_exp.sh.
 #
-# Each entry is treated as an experiment suffix and resolves to the
-# config triple:
-#     ./config/${CONFIG_PREFIX}_train_${ID}.yaml
-#     ./config/${CONFIG_PREFIX}_test_${ID}.yaml
-#     ./config/${CONFIG_PREFIX}_augmented_metrics_${ID}.yaml
+# Each entry is a run ID and resolves to the config triple:
+#     ./20261007_configs/${CONFIG_PREFIX}_${ID}_train.yaml
+#     ./20261007_configs/${CONFIG_PREFIX}_${ID}_test.yaml
+#     ./20261007_configs/${CONFIG_PREFIX}_${ID}_aug.yaml
 #
-# Two lists, kept separate because they vary along different axes:
-#   BASELINE_CONFIGS  -- partitioning scheme, model fixed at RouteNet
-#   GROUPNORM_CONFIGS -- same partitioning, model swapped to
-#                        RouteNetGroupNorm.  Each entry here is a
-#                        controlled A/B against the same-named baseline
-#                        (identical seed / E / eta / B / T), so it is only
-#                        interpretable if that baseline has also been run.
+# Every run uses RouteNetGroupNorm and matches
+# config/fedavg_train_{iid,feature_hierarchical}_groupnorm.yaml except for
+# the fields below.  Two lists, kept separate because they vary along
+# different axes:
+#   PARTICIPATION_CONFIGS -- {iid, FH} x K = 5 / 10 / 20 clients with full
+#                            participation (round_clients = n_partitions),
+#                            T = 200, E = 20.  The local-step budget
+#                            T * E * m grows with K: 20k / 40k / 80k.
+#   ROUNDS_CONFIGS        -- FH at the base K = 20 / m = 10 with T = 400
+#                            (80k steps, the same budget as FH_c20).
+#
+# The entry scripts default to config_path=./config, so the folder is
+# handed to Hydra with --config-path.
 #
 # Usage:
-#     ./run_all_experiments.sh                      # everything, both lists
-#     ./run_all_experiments.sh kmeans_groupnorm     # just the named IDs
-#     ./run_all_experiments.sh iid kmeans
+#     ./run_all_experiments.sh                  # everything, both lists
+#     ./run_all_experiments.sh FH_c5            # just the named IDs
+#     ./run_all_experiments.sh iid_c20 FH_c20
 #
-# Aim records every run under the experiment tag set inside each config.
+# Aim records the runs under the fedavg_drc_{train,test,augmented_metrics}
+# _20261007 experiments, each tagged with its run ID.
 
 set -e
 
 CONFIG_PREFIX='fedavg'
-BASELINE_CONFIGS=()
-GROUPNORM_CONFIGS=('iid_groupnorm' 'dirichlet_groupnorm')
+# Smallest K first, so each client count is finished for both schemes
+# before the next (and longer) one starts.
+PARTICIPATION_CONFIGS=('iid_c5' 'FH_c5' 'iid_c10' 'FH_c10' 'iid_c20' 'FH_c20')
+ROUNDS_CONFIGS=('FH_400r')
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
+CONFIG_DIR="${SCRIPT_DIR}/20261007_configs"
 
 # CLI args select a subset; no args runs both lists in full.
 if [ "$#" -gt 0 ]; then
     CONFIGS=("$@")
 else
-    CONFIGS=("${BASELINE_CONFIGS[@]}" "${GROUPNORM_CONFIGS[@]}")
+    CONFIGS=("${PARTICIPATION_CONFIGS[@]}" "${ROUNDS_CONFIGS[@]}")
 fi
 
-# Fail before burning a single GPU-hour if any pair is missing or misnamed.
+# Fail before burning a single GPU-hour if any triple is missing or misnamed.
 MISSING=0
 for ID in "${CONFIGS[@]}"; do
-    for PHASE in train test augmented_metrics; do
-        CFG="./config/${CONFIG_PREFIX}_${PHASE}_${ID}.yaml"
-        if [ ! -f "${CFG}" ]; then
-            echo "ERROR: missing config ${CFG}" >&2
+    for PHASE in train test aug; do
+        CFG="${CONFIG_DIR}/${CONFIG_PREFIX}_${ID}_${PHASE}.yaml"
+        if [ ! -s "${CFG}" ]; then
+            echo "ERROR: missing or empty config ${CFG}" >&2
             MISSING=1
         fi
     done
@@ -61,9 +70,9 @@ echo "Starting sequential execution of ${#CONFIGS[@]} FedCircuitNet configuratio
 echo "Logs will be recorded by Aim."
 
 for ID in "${CONFIGS[@]}"; do
-    TRAIN_CFG="${CONFIG_PREFIX}_train_${ID}"
-    TEST_CFG="${CONFIG_PREFIX}_test_${ID}"
-    METRICS_CFG="${CONFIG_PREFIX}_augmented_metrics_${ID}"
+    TRAIN_CFG="${CONFIG_PREFIX}_${ID}_train"
+    TEST_CFG="${CONFIG_PREFIX}_${ID}_test"
+    METRICS_CFG="${CONFIG_PREFIX}_${ID}_aug"
     LABEL="${ID}"
 
     echo "=========================================================="
@@ -71,15 +80,15 @@ for ID in "${CONFIGS[@]}"; do
     echo "=========================================================="
 
     echo "--> Training Config ${LABEL} (${TRAIN_CFG})"
-    # python train_aim.py --config-name="${TRAIN_CFG}"
+    python train_aim.py --config-path="${CONFIG_DIR}" --config-name="${TRAIN_CFG}"
 
     sleep 2
 
     echo "--> Testing Config ${LABEL} (${TEST_CFG})"
-    # python test_aim.py --config-name="${TEST_CFG}"
+    python test_aim.py --config-path="${CONFIG_DIR}" --config-name="${TEST_CFG}"
 
     echo "--> Augmented metrics Config ${LABEL} (${METRICS_CFG})"
-    python drc_augmented_metrics.py --config-name="${METRICS_CFG}"
+    python drc_augmented_metrics.py --config-path="${CONFIG_DIR}" --config-name="${METRICS_CFG}"
 
     echo "Configuration ${LABEL} completed successfully."
     echo ""

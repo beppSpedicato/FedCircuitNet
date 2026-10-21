@@ -64,15 +64,18 @@ class FedAvgClient(FederatedClient):
 
         loss_sum = 0.0
         n_steps = 0
-    
+
+        def _batches():
+            while True:
+                yield from self.data_loader
+
         with tqdm(total=self.local_epochs) as bar:
-            for inputs, targets in self.data_loader:
+            for inputs, targets in _batches():
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
 
                 regular_lr = cosine_lr.get_regular_lr(n_steps)
                 cosine_lr._set_lr(optimizer, regular_lr)
-                
                 optimizer.zero_grad()
                 loss = self.loss_fn(model(inputs), targets)
                 loss_sum += float(loss.item())

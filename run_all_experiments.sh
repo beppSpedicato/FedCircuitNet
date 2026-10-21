@@ -36,12 +36,12 @@ set -e
 CONFIG_PREFIX='fedavg'
 # Smallest K first, so each client count is finished for both schemes
 # before the next (and longer) one starts.
-PARTICIPATION_CONFIGS=('iid_c50' 'FH_c50')
+PARTICIPATION_CONFIGS=('iid_ep45_c5' 'FH_ep45_c5' 'iid_ep45_c10' 'FH_ep45_c10' 'iid_ep45_c20' 'FH_ep45_c20')
 ROUNDS_CONFIGS=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
-CONFIG_DIR="${SCRIPT_DIR}/20261012_configs"
+CONFIG_DIR="${SCRIPT_DIR}/20261221_configs"
 
 # CLI args select a subset; no args runs both lists in full.
 if [ "$#" -gt 0 ]; then
@@ -53,7 +53,7 @@ fi
 # Fail before burning a single GPU-hour if any triple is missing or misnamed.
 MISSING=0
 for ID in "${CONFIGS[@]}"; do
-    for PHASE in train test ; do # for PHASE in train test aug; do
+    for PHASE in train test; do
         CFG="${CONFIG_DIR}/${CONFIG_PREFIX}_${ID}_${PHASE}.yaml"
         if [ ! -s "${CFG}" ]; then
             echo "ERROR: missing or empty config ${CFG}" >&2
@@ -72,7 +72,6 @@ echo "Logs will be recorded by Aim."
 for ID in "${CONFIGS[@]}"; do
     TRAIN_CFG="${CONFIG_PREFIX}_${ID}_train"
     TEST_CFG="${CONFIG_PREFIX}_${ID}_test"
-    METRICS_CFG="${CONFIG_PREFIX}_${ID}_aug"
     LABEL="${ID}"
 
     echo "=========================================================="
@@ -86,9 +85,6 @@ for ID in "${CONFIGS[@]}"; do
 
     echo "--> Testing Config ${LABEL} (${TEST_CFG})"
     python test_aim.py --config-path="${CONFIG_DIR}" --config-name="${TEST_CFG}"
-
-    echo "--> Augmented metrics Config ${LABEL} (${METRICS_CFG})"
-    # python drc_augmented_metrics.py --config-path="${CONFIG_DIR}" --config-name="${METRICS_CFG}"
 
     echo "Configuration ${LABEL} completed successfully."
     echo ""

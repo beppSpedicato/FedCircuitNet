@@ -55,6 +55,8 @@ class FederatedStrategy(ABC):
         shuffle: Whether client loaders shuffle each local epoch.
         round_clients: Clients sampled per round (``m``).
         seed: Seed for the server's client-selection RNG.
+        max_parallel_clients: Server thread-pool width (``None`` = one
+            thread per client).
     """
 
     def __init__(
@@ -65,6 +67,7 @@ class FederatedStrategy(ABC):
         shuffle: bool = True,
         round_clients: Optional[int] = None,
         seed: Optional[int] = None,
+        max_parallel_clients: Optional[int] = 5,
     ) -> None:
         if batch_size < 1:
             raise ValueError(f"batch_size must be >= 1, got {batch_size}")
@@ -75,6 +78,7 @@ class FederatedStrategy(ABC):
         self.shuffle = shuffle
         self.round_clients = round_clients
         self.seed = seed
+        self.max_parallel_clients = max_parallel_clients
 
         self._server: Optional[FederatedServer] = None
 
@@ -158,6 +162,7 @@ class FederatedStrategy(ABC):
             device=self.device,
             round_clients=self.round_clients,
             seed=self.seed,
+            max_parallel_clients=self.max_parallel_clients,
         )
         self.round_clients = self._server.round_clients
         print(

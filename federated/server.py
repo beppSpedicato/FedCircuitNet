@@ -39,7 +39,8 @@ class FederatedServer:
         seed: Seed for the client-selection RNG.  A dedicated generator
             is used so the participation sequence is reproducible no
             matter how much of the global RNG local training consumes.
-        max_parallel_clients: Thread-pool width.
+        max_parallel_clients: Thread-pool width, clamped to ``K``;
+            ``None`` or ``0`` means one thread per client.
     """
 
     def __init__(
@@ -50,7 +51,7 @@ class FederatedServer:
         device: DeviceLike = None,
         round_clients: Optional[int] = None,
         seed: Optional[int] = None,
-        max_parallel_clients: int = 5,
+        max_parallel_clients: Optional[int] = 5,
     ) -> None:
 
         self.model_fn = model_fn

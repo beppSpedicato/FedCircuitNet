@@ -27,13 +27,16 @@ def build_fedavg(
         strategy_cfg: Contents of the ``strategy`` config block minus its
             ``type`` field.  Expected keys: ``local_epochs``,
             ``learning_rate``, ``batch_size``, ``loss_type``, and the
-            optional ``round_clients`` (default 10).
+            optional ``round_clients`` (default 10) and
+            ``max_parallel_clients`` (default 5; ``null`` = one thread
+            per client).
         runtime_cfg: Contents of the ``runtime`` block (``cpu`` / ``gpu``
             / ``gpu_id`` as in ``code_examples/CircuitNet/drc_prediction/train.py``,
             plus , ``num_workers``, ``shuffle``, ``seed``).
     """
     loss_fn: nn.Module = build_loss(strategy_cfg)
     round_clients = strategy_cfg.get("round_clients", 10)
+    max_parallel_clients = strategy_cfg.get("max_parallel_clients", 5)
 
     return FedAvgStrategy(
         local_epochs=int(strategy_cfg["local_epochs"]),
@@ -45,6 +48,9 @@ def build_fedavg(
         shuffle=bool(runtime_cfg.get("shuffle", True)),
         round_clients=None if round_clients is None else int(round_clients),
         seed=runtime_cfg.get("seed"),
+        max_parallel_clients=(
+            None if max_parallel_clients is None else int(max_parallel_clients)
+        ),
     )
 
 

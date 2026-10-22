@@ -27,6 +27,7 @@ class FedAvgStrategy(FederatedStrategy):
         shuffle: Whether client loaders shuffle each local epoch.
         round_clients: Clients sampled per round (``m = C * K``).
         seed: Seed for the client-selection RNG.
+        max_parallel_clients: Server thread-pool width.
         aggregator: Optional override for the merge -- kept optional so
             ablations (e.g. unweighted mean, FedBN-style BN skipping) can
             be dropped in without subclassing.
@@ -43,6 +44,7 @@ class FedAvgStrategy(FederatedStrategy):
         shuffle: bool = True,
         round_clients: Optional[int] = None,
         seed: Optional[int] = None,
+        max_parallel_clients: Optional[int] = 5,
         aggregator: Optional[Aggregator] = None,
     ) -> None:
         super().__init__(
@@ -52,6 +54,7 @@ class FedAvgStrategy(FederatedStrategy):
             shuffle=shuffle,
             round_clients=round_clients,
             seed=seed,
+            max_parallel_clients=max_parallel_clients,
         )
         if local_epochs < 1:
             raise ValueError(f"local_epochs must be >= 1, got {local_epochs}")

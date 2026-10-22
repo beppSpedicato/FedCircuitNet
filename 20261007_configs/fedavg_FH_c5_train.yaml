@@ -19,8 +19,8 @@ tag: FH_c5
 # ---------------------------------------------------------------------------
 data:
   metadata_csv: ./files/train_N28.csv
-  feature_dir: /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/feature
-  label_dir:   /home/spedicato/CircuitNet/routability_ir_drop_prediction/training_set_N28/DRC/label
+  feature_dir: ./training_set_N28/DRC/feature
+  label_dir:   ./training_set_N28/DRC/label
 
 # ---------------------------------------------------------------------------
 # Partitioning

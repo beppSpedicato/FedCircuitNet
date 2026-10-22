@@ -59,7 +59,7 @@ strategy:
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false
-  gpu: 0
+  gpu: 1
   num_workers: 0
   seed: 0
   shuffle: true

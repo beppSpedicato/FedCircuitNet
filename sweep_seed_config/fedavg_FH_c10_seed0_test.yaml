@@ -42,7 +42,7 @@ checkpoint: ./work_dirs/sweep_seed/fedavg_FH_40KL_c10_seed0/model_round_1600.pth
 # ---------------------------------------------------------------------------
 runtime:
   cpu: false
-  gpu: 0
+  gpu: 1
   num_workers: 0
   seed: 0
 

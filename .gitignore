@@ -222,3 +222,4 @@ __marimo__/
 work_dirs/
 work_dir/
 outputs/
+.claude/

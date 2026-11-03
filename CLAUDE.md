@@ -29,7 +29,7 @@ python create_metadata_files.py --input=<ann.csv> --output=files/<name>.csv
 python train_aim.py --config-name=fedavg_train_feature_hierarchical
 python test_aim.py  --config-name=fedavg_test_feature_hierarchical
 
-# All scheme pairs sequentially (iid, kmeans, dirichlet, feature_hierarchical)
+# All 20261007_configs/ triples sequentially (iid/FH x c5/c10/c20, FH_400r)
 ./run_all_experiments.sh
 
 # Any nested config field is overridable from the CLI
